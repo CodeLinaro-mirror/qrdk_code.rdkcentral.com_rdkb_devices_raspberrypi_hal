@@ -408,7 +408,7 @@ INT rpi_getRadioCapabilities(int radioIndex, wifi_radio_capabilities_t *rcap)
 		GetInterfaceName(rcap->ifaceName,"/nvram/hostapd0.conf");
 		rcap->band[radioIndex] = WIFI_FREQUENCY_2_4_BAND;
 		rcap->mode[radioIndex] = WIFI_80211_VARIANT_G | WIFI_80211_VARIANT_N;
-		rcap->channelWidth[radioIndex] = WIFI_CHANNELBANDWIDTH_20MHZ;
+		rcap->channelWidth[radioIndex] |= (WIFI_CHANNELBANDWIDTH_20MHZ | WIFI_CHANNELBANDWIDTH_40MHZ);
 		rcap->maxBitRate[radioIndex] = 144;
 		rcap->supportedBitRate[radioIndex] |= (WIFI_BITRATE_1MBPS | WIFI_BITRATE_2MBPS |
                                 WIFI_BITRATE_5_5MBPS | WIFI_BITRATE_6MBPS | WIFI_BITRATE_9MBPS |
