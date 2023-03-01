@@ -168,7 +168,7 @@ int *rpi_wifi_get_clients_count(int *pcount,char *ifname,int apIndex)
         char cmd[MAX_CMD_SIZE]={0};
         char buf[MAX_BUF_SIZE] = {0};
 
-        snprintf(cmd,sizeof(cmd),"hostapd_cli -p /var/run/hostapd%d -i%s all_sta | grep dot11RSNAStatsSTAAddress | wc -l",apIndex,ifname);
+        snprintf(cmd,sizeof(cmd),"hostapd_cli -i%s all_sta | grep dot11RSNAStatsSTAAddress | wc -l",ifname);
         if(_syscmd(cmd,buf,sizeof(buf)) == RETURN_ERR)
         {
                 wifi_dbg_printf("%s No associated list found :%s \n",__FUNCTION__,buf);
@@ -180,8 +180,8 @@ int *rpi_wifi_get_clients_count(int *pcount,char *ifname,int apIndex)
 }
 
 /* DRAFT
- * hostapd_cli -p <path of the socket> -i<wireless_name> sta <connected_mac_address>
-Example : hostapd_cli -p /var/run/hostapd1 -iwlan1 sta 48:3b:38:35:cc:fb
+ * hostapd_cli -i<wireless_name> sta <connected_mac_address>
+Example : hostapd_cli  -iwlan1 sta 48:3b:38:35:cc:fb
 48:3b:38:35:cc:fb
 flags=[AUTH][ASSOC][AUTHORIZED]
 aid=0
@@ -273,7 +273,7 @@ static int get_assoc_clients_data(const int version, char *ifname, int ai, struc
         }
         else
         {
-                snprintf(cmd,sizeof(cmd),"hostapd_cli -p /var/run/hostapd%d -i%s all_sta | grep dot11RSNAStatsSTAAddress | cut -d '=' -f2 | sed '%dq;d'",apIndex,ifname,ai+1);
+                snprintf(cmd,sizeof(cmd),"hostapd_cli -i%s all_sta | grep dot11RSNAStatsSTAAddress | cut -d '=' -f2 | sed '%dq;d'",ifname,ai+1);
                 if(get_assoc_client_details2(buf,cmd,"MAC list") == RETURN_ERR)
                         return RETURN_ERR;
                 strncpy(mac_str, buf,sizeof(mac_str));
@@ -312,14 +312,14 @@ static int get_assoc_clients_data(const int version, char *ifname, int ai, struc
 	
         /* get associated devices received packets*/
         CHECK_BUF_STATUS(buf,cmd);
-        snprintf(cmd,sizeof(cmd),"hostapd_cli -p /var/run/hostapd%d -i%s sta %s | grep \"rx_packets=\" | cut -d '=' -f2",apIndex,ifname,mac_str);
+        snprintf(cmd,sizeof(cmd),"hostapd_cli -i%s sta %s | grep \"rx_packets=\" | cut -d '=' -f2",ifname,mac_str);
         if(get_assoc_client_details2(buf,cmd,"rx_packets") == RETURN_ERR)
                 return RETURN_ERR;
         dd->rx_pkts = atoi(buf);
 
         /* get associated devices sent packets*/
         CHECK_BUF_STATUS(buf,cmd);
-        snprintf(cmd,sizeof(cmd),"hostapd_cli -p /var/run/hostapd%d -i%s sta %s | grep \"tx_packets=\" | cut -d '=' -f2",apIndex,ifname,mac_str);
+        snprintf(cmd,sizeof(cmd),"hostapd_cli -i%s sta %s | grep \"tx_packets=\" | cut -d '=' -f2",ifname,mac_str);
         if(get_assoc_client_details2(buf,cmd,"tx_pkts") == RETURN_ERR)
                 return RETURN_ERR;
         dd->tx_pkts = atoi(buf);
@@ -332,7 +332,7 @@ static int get_assoc_clients_data(const int version, char *ifname, int ai, struc
 	else
 	{	
 		CHECK_BUF_STATUS(buf,cmd);
-		snprintf(cmd,sizeof(cmd),"hostapd_cli -p /var/run/hostapd%d -i%s sta %s | grep \"tx_bytes=\" | cut -d '=' -f2",apIndex,ifname,mac_str);
+		snprintf(cmd,sizeof(cmd),"hostapd_cli -i%s sta %s | grep \"tx_bytes=\" | cut -d '=' -f2",ifname,mac_str);
 		if(get_assoc_client_details2(buf,cmd,"tx_bytes") == RETURN_ERR)
 			return RETURN_ERR;
 		dd->tx_bytes = atoi(buf);
@@ -346,7 +346,7 @@ static int get_assoc_clients_data(const int version, char *ifname, int ai, struc
 	else
 	{	
 		CHECK_BUF_STATUS(buf,cmd);
-		snprintf(cmd,sizeof(cmd),"hostapd_cli -p /var/run/hostapd%d -i%s sta %s | grep \"rx_bytes=\" | cut -d '=' -f2",apIndex,ifname,mac_str);
+		snprintf(cmd,sizeof(cmd),"hostapd_cli -i%s sta %s | grep \"rx_bytes=\" | cut -d '=' -f2",ifname,mac_str);
 		if(get_assoc_client_details2(buf,cmd,"rx_bytes") == RETURN_ERR)
 			return RETURN_ERR;
 		dd->rx_bytes = atoi(buf);
@@ -354,14 +354,14 @@ static int get_assoc_clients_data(const int version, char *ifname, int ai, struc
 
 	 /* get associated devices received rate*/
         CHECK_BUF_STATUS(buf,cmd);
-        snprintf(cmd,sizeof(cmd),"hostapd_cli -p /var/run/hostapd%d -i%s sta %s | grep \"rx_rate_info=\" | cut -d '=' -f2",apIndex,ifname,mac_str);
+        snprintf(cmd,sizeof(cmd),"hostapd_cli -i%s sta %s | grep \"rx_rate_info=\" | cut -d '=' -f2",ifname,mac_str);
         if(get_assoc_client_details2(buf,cmd,"rx_rate") == RETURN_ERR)
                 return RETURN_ERR;
         dd->rx_rate = atoi(buf);
 
 	 /* get associated devices sent rate*/
         CHECK_BUF_STATUS(buf,cmd);
-        snprintf(cmd,sizeof(cmd),"hostapd_cli -p /var/run/hostapd%d -i%s sta %s | grep \"tx_rate_info=\" | cut -d '=' -f2",apIndex,ifname,mac_str);
+        snprintf(cmd,sizeof(cmd),"hostapd_cli -i%s sta %s | grep \"tx_rate_info=\" | cut -d '=' -f2",ifname,mac_str);
         if(get_assoc_client_details2(buf,cmd,"tx_rate") == RETURN_ERR)
                 return RETURN_ERR;
         dd->tx_rate = atoi(buf);
@@ -369,7 +369,7 @@ static int get_assoc_clients_data(const int version, char *ifname, int ai, struc
 
 	 /*get per clients stats*/
         CHECK_BUF_STATUS(buf,cmd);
-        snprintf(cmd,sizeof(cmd),"hostapd_cli -p /var/run/hostapd%d -i%s sta %s | grep -w \"\\[AUTH\\]\\[ASSOC\\]\" | wc -l",apIndex,ifname,mac_str);
+        snprintf(cmd,sizeof(cmd),"hostapd_cli -i%s sta %s | grep -w \"\\[AUTH\\]\\[ASSOC\\]\" | wc -l",ifname,mac_str);
 	if(get_assoc_client_details2(buf,cmd,"stats") == RETURN_ERR)
                 return RETURN_ERR;
         if(atoi(buf) == 1)
@@ -383,7 +383,7 @@ static int get_assoc_clients_data(const int version, char *ifname, int ai, struc
 
 	 /* get associated devices error*/
         CHECK_BUF_STATUS(buf,cmd);
-        snprintf(cmd,sizeof(cmd),"hostapd_cli -p /var/run/hostapd%d -i%s sta %s | grep \"dot11RSNAStatsTKIPLocalMICFailures=\" | cut -d '=' -f2",apIndex,ifname,mac_str);
+        snprintf(cmd,sizeof(cmd),"hostapd_cli -i%s sta %s | grep \"dot11RSNAStatsTKIPLocalMICFailures=\" | cut -d '=' -f2",ifname,mac_str);
         if(get_assoc_client_details2(buf,cmd,"Errors") == RETURN_ERR)
                 return RETURN_ERR;
         dd->tx_err = atoi(buf);
@@ -510,9 +510,9 @@ static int associated_clients_diagnostic_helper(const int version, int apIndex, 
                 {
                         /* For collection of connected devices with both bands */
                         if(apIndex == 1)
-                                snprintf(buf,sizeof(buf),"hostapd_cli -p /var/run/hostapd%d -i%s all_sta | grep dot11RSNAStatsSTAAddress | sed '%dq;d' >> /tmp/AllAssociated_Devices_5G.txt",apIndex,ifname,index+1);
+                                snprintf(buf,sizeof(buf),"hostapd_cli -i%s all_sta | grep dot11RSNAStatsSTAAddress | sed '%dq;d' >> /tmp/AllAssociated_Devices_5G.txt",ifname,index+1);
                         else if(apIndex == 0)
-                                snprintf(buf,sizeof(buf),"hostapd_cli -p /var/run/hostapd%d -i%s all_sta | grep dot11RSNAStatsSTAAddress | sed '%dq;d' >> /tmp/AllAssociated_Devices_2G.txt",apIndex,ifname,index+1);
+                                snprintf(buf,sizeof(buf),"hostapd_cli -i%s all_sta | grep dot11RSNAStatsSTAAddress | sed '%dq;d' >> /tmp/AllAssociated_Devices_2G.txt",ifname,index+1);
                         system(buf);
                         memset(&dd, 0, sizeof(dd));
                         if (get_assoc_clients_data(version,ifname, index, &dd,0,apIndex) == RETURN_ERR)

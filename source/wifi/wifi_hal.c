@@ -229,8 +229,7 @@ static int rpi_hostapdProcessUpdate(int apIndex, struct hostapd_params *list, in
 
     for(i=0; i<item_count; i++, list++)
     {
-        snprintf(cmd, sizeof(cmd), "hostapd_cli -p/var/run/hostapd%d -i%s SET %s %s", apIndex,ifname, list->name, list->value);
-	printf("%s:%s\n",__FUNCTION__,cmd);
+        snprintf(cmd, sizeof(cmd), "hostapd_cli -i%s SET %s %s",ifname, list->name, list->value);
         if((fp = popen(cmd, "r"))==NULL)
         {
             perror("popen failed");
@@ -252,18 +251,13 @@ static int rpi_reloadAp(int apIndex)
     sprintf(conf_file,"%s%d.conf",CONFIG_PREFIX,apIndex);
     GetInterfaceName(ifname,conf_file);
 
-    snprintf(cmd, sizeof(cmd), "hostapd_cli -p/var/run/hostapd%d -i%s reload", apIndex,ifname);
+    snprintf(cmd, sizeof(cmd), "hostapd_cli -i%s reload", ifname);
     if (_syscmd(cmd, buf, sizeof(buf)) == RETURN_ERR)
         return RETURN_ERR;
 
-    snprintf(cmd, sizeof(cmd), "hostapd_cli -p/var/run/hostapd%d -i%s disable", apIndex,ifname);
-    if (_syscmd(cmd, buf, sizeof(buf)) == RETURN_ERR)
-        return RETURN_ERR;
-
-    snprintf(cmd, sizeof(cmd), "hostapd_cli -p/var/run/hostapd%d -i%s enable", apIndex,ifname);
-    if (_syscmd(cmd, buf, sizeof(buf)) == RETURN_ERR)
-        return RETURN_ERR;
-     return RETURN_OK;
+    Dynamically_Disabling_hostapd_process(apIndex,TRUE);
+    Dynamically_Enabling_hostapd_process(apIndex);
+    return RETURN_OK;
 }
 	
 INT File_Reading(CHAR *file, char *Value)
@@ -309,76 +303,6 @@ void Prefer_Private_Connection(char *PreferPrivateConnection)
 		PreferPrivateConnection[count] = buf[count];
 	PreferPrivateConnection[count] = '\0';
 }
-//Restarting the hostapd process
-void restarthostapd_all(char *hostapd_configuration)
-{
-	WIFI_ENTRY_EXIT_DEBUG("Inside %s:%d\n",__func__, __LINE__);
-	char buf[512] = {0};
-	sprintf(buf,"%s%s%s","ps -eaf | grep ",hostapd_configuration," | grep -v grep | awk '{print $1}' | xargs kill -9");
-	system(buf);
-	system("sleep 3");
-	sprintf(buf,"%s%s","/usr/sbin/hostapd -B ",hostapd_configuration);
-	system(buf);
-	WIFI_ENTRY_EXIT_DEBUG("Exiting %s:%d\n",__func__, __LINE__);
-}
-
-void wifi_RestartHostapd_5G(INT radioIndex)
-{
-	WIFI_ENTRY_EXIT_DEBUG("Inside %s:%d\n",__func__, __LINE__);
-
-	if(radioIndex == 1)
-		system("ps -eaf | grep hostapd1.conf | grep -v grep | awk '{print $1}' | xargs kill -9");
-	else if(radioIndex == 5)
-		system("ps -eaf | grep hostapd5.conf | grep -v grep | awk '{print $1}' | xargs kill -9");
-
-	system("rmmod rtl8812au && rmmod 88x2bu");
-	system("sleep 3");
-	system("modprobe rtl8812au && modprobe 88x2bu");
-	system("sleep 5");
-	WIFI_ENTRY_EXIT_DEBUG("Exiting %s:%d\n",__func__, __LINE__);
-}
-
-void wifi_RestartHostapd_2G()
-{
-	WIFI_ENTRY_EXIT_DEBUG("Inside %s:%d\n",__func__, __LINE__);
-	system("ps -eaf | grep hostapd4.conf | grep -v grep | awk '{print $1}' | xargs kill -9");
-	system("rmmod 8192eu");
-	system("sleep 3");
-	system("modprobe 8192eu");
-	system("sleep 5");
-	WIFI_ENTRY_EXIT_DEBUG("Exiting %s:%d\n",__func__, __LINE__);
-}
-
-void wifi_RestartPrivateWifi_2G()
-{
-    WIFI_ENTRY_EXIT_DEBUG("Inside %s:%d\n",__func__, __LINE__);
-	char buf[512] = {0};
-	char interface_name[512] = {0},rpi_board_status[512] = {0};
-	int count = 0;
-	system("ps -eaf | grep hostapd0.conf | grep -v grep | awk '{print $1}' | xargs kill -9");
-    system("sleep 2");
-	_syscmd("cat /proc/device-tree/model | cut -d ' ' -f5-6",buf,sizeof(buf));
-
-	for(count = 0;buf[count]!='\n';count++)
-        rpi_board_status[count] = buf[count]; //ajusting the size
-    
-	rpi_board_status[count] = '\0';
-	
-	if(strcmp(rpi_board_status,"B Plus") == 0)
-	{
-		GetInterfaceName(interface_name,"/nvram/hostapd0.conf");
-		sprintf(buf,"%s%s%s","ifconfig ",interface_name," down");		
-		system(buf);
-	}
-	else
-	{
-        system("rmmod brcmfmac");
-        system("sleep 3");
-        system("modprobe brcmfmac");
-        system("sleep 5");
-	}
-    WIFI_ENTRY_EXIT_DEBUG("Exiting %s:%d\n",__func__, __LINE__);
-}
 
 static int writeBandWidth(int radioIndex,char *bw_value)
 {
@@ -402,6 +326,10 @@ static int readBandWidth(int radioIndex,char *bw_value)
 	else if(NULL!=strstr(buf,"40MHz"))
 	{
 			strcpy(bw_value,"40MHz");
+	}
+	else if(NULL!=strstr(buf,"80MHz"))
+	{
+			strcpy(bw_value,"80MHz");
 	}
 	else
 	{
@@ -543,7 +471,7 @@ static INT get_param_value(char *parameter, char *output)
 static INT prepare_hostapd_conf()
 {
 	char cmd[128];
-    /* check  /usr/ccsp/wifi/hostapd0.conf, /usr/ccsp/wifi/hostapd0.conf , /usr/ccsp/wifi/hostapd4.conf,/usr/ccsp/wifi/hostapd5.conf exists or not */
+	/* check  /usr/ccsp/wifi/hostapd0.conf, /usr/ccsp/wifi/hostapd1.conf , /usr/ccsp/wifi/hostapd4.conf,/usr/ccsp/wifi/hostapd5.conf exists or not */
 	if(( access(DEF_HOSTAPD_CONF_0, F_OK) != -1 ) && ( access(DEF_HOSTAPD_CONF_1, F_OK) != -1 ) && ( access(DEF_HOSTAPD_CONF_4, F_OK) != -1 ) && ( access(DEF_HOSTAPD_CONF_5, F_OK) != -1 ))
 	{
 		wifi_dbg_printf("\n[%s]: Default files %s and %s presents!!\n",__func__,DEF_HOSTAPD_CONF_0,DEF_HOSTAPD_CONF_1);
@@ -553,31 +481,37 @@ static INT prepare_hostapd_conf()
 		wifi_dbg_printf("\n[%s]: Default files %s and %s not presents!!\n",__func__,DEF_HOSTAPD_CONF_0,DEF_HOSTAPD_CONF_1);
 		return RETURN_ERR;
 	}
-    /* check  /nvram/hostapd0.conf exists or not */
-	if( access(HOSTAPD_CONF_0, F_OK) != -1 )
+	if(WEXITSTATUS(system("lsmod | grep mt76*")) == 0)
 	{
-		wifi_dbg_printf("\n[%s]: %s file allready exits!!\n",__func__,HOSTAPD_CONF_0);
-	}
+		printf("Netgear module is detected so hostapd configuration preparation is handled by hostapd boot up script.. \n");
+	}	
 	else
-	{
-		wifi_dbg_printf("\n[%s]: %s file does not exits. Preparing from %s file\n",__func__,HOSTAPD_CONF_0,DEF_HOSTAPD_CONF_0);
-		sprintf(cmd, "cp %s %s",DEF_HOSTAPD_CONF_0,HOSTAPD_CONF_0);
-		system(cmd);
-	}
+	{	
+		/* check  /nvram/hostapd0.conf exists or not */
+		if( access(HOSTAPD_CONF_0, F_OK) != -1 )
+		{
+			wifi_dbg_printf("\n[%s]: %s file allready exits!!\n",__func__,HOSTAPD_CONF_0);
+		}
+		else
+		{
+			wifi_dbg_printf("\n[%s]: %s file does not exits. Preparing from %s file\n",__func__,HOSTAPD_CONF_0,DEF_HOSTAPD_CONF_0);
+			sprintf(cmd, "cp %s %s",DEF_HOSTAPD_CONF_0,HOSTAPD_CONF_0);
+			system(cmd);
+		}
 
-    /* check  /nvram/hostapd1.conf exists or not */
-	if( access(HOSTAPD_CONF_1, F_OK) != -1 )
-	{
-		wifi_dbg_printf("\n[%s]: %s file allready exits!!\n",__func__,HOSTAPD_CONF_1);
+		/* check  /nvram/hostapd1.conf exists or not */
+		if( access(HOSTAPD_CONF_1, F_OK) != -1 )
+		{
+			wifi_dbg_printf("\n[%s]: %s file allready exits!!\n",__func__,HOSTAPD_CONF_1);
+		}
+		else
+		{
+			wifi_dbg_printf("\n[%s]: %s file does not exits. Preparing from %s file\n",__func__,HOSTAPD_CONF_1,DEF_HOSTAPD_CONF_1);
+			sprintf(cmd, "cp %s %s",DEF_HOSTAPD_CONF_1,HOSTAPD_CONF_1);
+			system(cmd);
+		}
 	}
-	else
-	{
-		wifi_dbg_printf("\n[%s]: %s file does not exits. Preparing from %s file\n",__func__,HOSTAPD_CONF_1,DEF_HOSTAPD_CONF_1);
-		sprintf(cmd, "cp %s %s",DEF_HOSTAPD_CONF_1,HOSTAPD_CONF_1);
-		system(cmd);
-	}
-
-    /* check  /nvram/hostapd4.conf exists or not */
+	/* check  /nvram/hostapd4.conf exists or not */
 	if( access(HOSTAPD_CONF_4, F_OK) != -1 )
 	{
 		wifi_dbg_printf("\n[%s]: %s file allready exits!!\n",__func__,HOSTAPD_CONF_4);
@@ -589,7 +523,7 @@ static INT prepare_hostapd_conf()
 		system(cmd);
 	}
 
-    /* check  /nvram/hostapd5.conf exists or not */
+	/* check  /nvram/hostapd5.conf exists or not */
 	if( access(HOSTAPD_CONF_5, F_OK) != -1 )
 	{
 		wifi_dbg_printf("\n[%s]: %s file allready exits!!\n",__func__,HOSTAPD_CONF_5);
@@ -600,25 +534,92 @@ static INT prepare_hostapd_conf()
 		sprintf(cmd, "cp %s %s",DEF_HOSTAPD_CONF_5,HOSTAPD_CONF_5);
 		system(cmd);
 	}
+
 	return RETURN_OK;
 }
 
+
 void wifi_newApAssociatedDevice_callback_register(wifi_newApAssociatedDevice_callback callback_proc)
 {
+	return 0;
 }
 
+void wifi_apDisassociatedDevice_callback_register(wifi_apDisassociatedDevice_callback callback_proc)
+{
+	return 0;
+}
+//knowning the current status of radio and ssid
+void get_radio_ssid_currentstatus(int index,char *ssid_status, char *radio_status)
+{
 
+        FILE *fp,*fp1 = NULL;
+        int count;
+        char path[32] = {0};
+        if(index == 0)
+        {
+                fp = fopen("/var/Get2gssidEnable.txt","r");
+                fp1 = fopen("/var/Get2gRadioEnable.txt","r");
+        }
+        else
+        {
+                fp = fopen("/var/Get5gssidEnable.txt","r");
+                fp1 = fopen("/var/Get5gRadioEnable.txt","r");
+        }
+        if((fp == NULL) || (fp1 == NULL))
+                return RETURN_OK;
+        if(fgets(path, sizeof(path)-1, fp) != NULL)
+        {
+                for(count=0;path[count]!='\n';count++)
+                        ssid_status[count]=path[count];
+                ssid_status[count]='\0';
+        }
+        fclose(fp);
+        memset(path,0,sizeof(path));
+        if(fgets(path, sizeof(path)-1, fp1) != NULL)
+        {
+                for(count=0;path[count]!='\n';count++)
+                        radio_status[count]=path[count];
+                radio_status[count]='\0';
+        }
+        fclose(fp1);
+	return RETURN_OK;
+}
 //Stop or Strat the broadcasting SSID names in Hostapd process
 void Stop_Start_Broadcasting_SSID_Names_Hostapd_Process(int index,BOOL *Public_ssid,char *Alias_Interface_name)
 {
         char cmd[MAX_CMD_SIZE] = {0};
         if(*Public_ssid == 0)
-                sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d  -i %s SET ignoe_broadcast_ssid 1",index,Alias_Interface_name);
+                sprintf(cmd,"hostapd_cli -i %s SET ignore_broadcast_ssid 1",Alias_Interface_name);
         else
-                sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d -i %s SET ignoe_broadcast_ssid 0",index,Alias_Interface_name);
+                sprintf(cmd,"hostapd_cli -i %s SET ignore_broadcast_ssid 0",Alias_Interface_name);
         system(cmd);
 }
+void get_pssid_currentstatus(int apIndex,char *ifname)
+{
 
+        FILE *fp = NULL;
+        int count;
+        char path[32] = {0},buf[64] = {0},pssid_status[10] = {0};
+        if(apIndex == 4)
+                fp = fopen("/var/GetPub2gssidEnable.txt","r");
+        else 
+                fp = fopen("/var/GetPub5gssidEnable.txt","r");
+        if(fp == NULL)
+                return RETURN_OK;
+        if(fgets(path, sizeof(path)-1, fp) != NULL)
+        {
+                for(count=0;path[count]!='\n';count++)
+                        pssid_status[count]=path[count];
+                pssid_status[count]='\0';
+        }
+        fclose(fp);
+	if(!strcmp(pssid_status,"0"))
+	{
+		snprintf(buf,sizeof(buf),"hostapd_cli -i%s disable",ifname);
+		system(buf);
+	}
+	return RETURN_OK;
+}
 //Get the interface name form hostapd conf using index number
 void GetInterfaceName_HostapdConf(int apIndex,char *interface_name)
 {
@@ -628,24 +629,38 @@ void GetInterfaceName_HostapdConf(int apIndex,char *interface_name)
 }
 
 //Dynamically Disabling the hostapd process
-void Dynamically_Disabling_hostapd_process(int apIndex)
+void Dynamically_Disabling_hostapd_process(int apIndex,BOOL flag)
 {
-        char interface_name[10] = {0};
-        char cmd[MAX_CMD_SIZE] = {0};
-        GetInterfaceName_HostapdConf(apIndex,interface_name);
-        sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d -i %s DISABLE",apIndex,interface_name);
-        system(cmd);
+	char radio_status[10] = {0},ssid_status[10] = {0};
+	char interface_name[10] = {0};
+	char cmd[MAX_CMD_SIZE] = {0};
+	GetInterfaceName_HostapdConf(apIndex,interface_name);
+	get_radio_ssid_currentstatus(apIndex,ssid_status,radio_status);
+	if((apIndex == 4) || (apIndex ==5))
+		get_pssid_currentstatus(apIndex,interface_name);
+	if((strcmp(ssid_status,"0") == 0 ) || (strcmp(radio_status,"0") == 0) || (flag == TRUE))			
+	{
+	sprintf(cmd,"hostapd_cli -i%s disable",interface_name);
+	system(cmd);
+	}
 }
 
 //Dynamically Enabling the hostapd process
 void Dynamically_Enabling_hostapd_process(int apIndex)
 {
+	char radio_status[10] = {0},ssid_status[10] = {0};
         char interface_name[10] = {0};
         char cmd[MAX_CMD_SIZE] = {0};
+	get_radio_ssid_currentstatus(apIndex,ssid_status,radio_status);
         GetInterfaceName_HostapdConf(apIndex,interface_name);
-        sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d -i %s ENABLE",apIndex,interface_name);
-	printf("%s .. %s \n",__FUNCTION__,cmd);
+
+        if((strcmp(radio_status,"1") == 0 ) && (strcmp(ssid_status,"1") == 0))
+        {
+        sprintf(cmd,"hostapd_cli -i%s enable",interface_name);
         system(cmd);
+	}
+	if((apIndex == 4) || (apIndex ==5))
+		get_pssid_currentstatus(apIndex,interface_name);
 }
 
 void Dynamically_Updated_SupportedRated_hostapd_process(int apIndex, char *string)
@@ -653,9 +668,9 @@ void Dynamically_Updated_SupportedRated_hostapd_process(int apIndex, char *strin
         char interface_name[10] = {0};
         char cmd[MAX_CMD_SIZE] = {0};
         GetInterfaceName_HostapdConf(apIndex,interface_name);
-        sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d -i %s SET supported_rates \"%s\"",apIndex,interface_name,string);
+        sprintf(cmd,"hostapd_cli -i %s SET supported_rates \"%s\"",interface_name,string);
         system(cmd);
-        Dynamically_Disabling_hostapd_process(apIndex);
+        Dynamically_Disabling_hostapd_process(apIndex,TRUE);
         Dynamically_Enabling_hostapd_process(apIndex);
 	
 }
@@ -667,9 +682,9 @@ void Dynamically_Updated_Password_hostapd_process(int apIndex,char *password)
         GetInterfaceName_HostapdConf(apIndex,interface_name);
 	if((apIndex == 0) || (apIndex == 1))
 	{
-	        sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d -i %s SET wpa_passphrase %s",apIndex,interface_name,password);
+	        sprintf(cmd,"hostapd_cli -i %s SET wpa_passphrase %s",interface_name,password);
         system(cmd);
-        Dynamically_Disabling_hostapd_process(apIndex);
+        Dynamically_Disabling_hostapd_process(apIndex,TRUE);
         Dynamically_Enabling_hostapd_process(apIndex);
 	}
 }
@@ -681,11 +696,11 @@ void Dynamically_Updated_SSIDAdvertisement_Hostapd_Process(int apIndex,BOOL enab
         char cmd[MAX_CMD_SIZE] = {0};
         GetInterfaceName_HostapdConf(apIndex,interface_name);
         if(enable == TRUE)
-                sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d -i %s SET ignore_broadcast_ssid 0",apIndex,interface_name);
+                sprintf(cmd,"hostapd_cli  -i %s SET ignore_broadcast_ssid 0",interface_name);
         else
-                sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d -i %s SET ignore_broadcast_ssid 1",apIndex,interface_name);
+                sprintf(cmd,"hostapd_cli  -i %s SET ignore_broadcast_ssid 1",interface_name);
         system(cmd);
-        Dynamically_Disabling_hostapd_process(apIndex);
+        Dynamically_Disabling_hostapd_process(apIndex,TRUE);
         Dynamically_Enabling_hostapd_process(apIndex);
 }
 
@@ -697,12 +712,12 @@ void Dynamically_Updated_SSIDName_Hostapd_Process(int apIndex,char *ssid)
         char cmd[MAX_CMD_SIZE] = {0},password[50] = {0};
         GetInterfaceName_HostapdConf(apIndex,interface_name);
         wifi_getApSecurityPreSharedKey(apIndex,password);
-        sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d -i %s SET ssid %s",apIndex,interface_name,ssid);
+        sprintf(cmd,"hostapd_cli  -i %s SET ssid %s",interface_name,ssid);
         system(cmd);
         memset(cmd,0,sizeof(cmd));
-        sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d -i %s SET wpa_passphrase %s",apIndex,interface_name,password);
+        sprintf(cmd,"hostapd_cli  -i %s SET wpa_passphrase %s",interface_name,password);
         system(cmd);
-         Dynamically_Disabling_hostapd_process(apIndex);
+        Dynamically_Disabling_hostapd_process(apIndex,TRUE);
         Dynamically_Enabling_hostapd_process(apIndex);
 }
 
@@ -711,9 +726,9 @@ void DYnamically_Updated_OperatingChannelBandwidth(int radioIndex,char *String)
 	char interface_name[10] = {0};
 	char cmd[MAX_CMD_SIZE] = {0};
 	GetInterfaceName_HostapdConf(radioIndex,interface_name);
-	sprintf(cmd,"hostapd_cli  -p /var/run/hostapd%d -i %s SET vht_oper_chwidth  %s",radioIndex,interface_name,String);
+	sprintf(cmd,"hostapd_cli -i %s SET vht_oper_chwidth  %s",interface_name,String);
 	system(cmd);
-        Dynamically_Disabling_hostapd_process(radioIndex);
+        Dynamically_Disabling_hostapd_process(radioIndex,TRUE);
         Dynamically_Enabling_hostapd_process(radioIndex);
 }
 //Dynamically updated the new Security_mode/Encryption mode operation in hostapd process
@@ -752,22 +767,22 @@ void Dynamically_Updated_Security_Encryption_Modes_Hostapd_Process(int apIndex,c
 		{
 			if(strcmp(String,"None") == 0)
 			{
-				sprintf(buf,"hostapd_cli -p /var/run/hostapd%d -i %s SET wpa jkn",apIndex,interface_name);
+				sprintf(buf,"hostapd_cli  -i %s SET wpa jkn",interface_name);
 				system(buf);
 			}
 			else
 			{
 				if((strcmp(String,"WPA-Personal") == 0) || (strcmp(String,"WPA") == 0))
 				{
-					sprintf(buf,"hostapd_cli -p /var/run/hostapd%d -i %s SET wpa 1",apIndex,interface_name);
+					sprintf(buf,"hostapd_cli -i %s SET wpa 1",interface_name);
 				}
 				else if((strcmp(String,"WPA2-Personal") == 0) || (strcmp(String,"11i") == 0))
 				{
-					sprintf(buf,"hostapd_cli -p /var/run/hostapd%d -i %s SET wpa 2",apIndex,interface_name);
+					sprintf(buf,"hostapd_cli -i %s SET wpa 2",interface_name);
 				}
 				else if((strcmp(String,"WPA-WPA2-Personal") == 0) || (strcmp(String,"WPAand11i") == 0))
 				{
-					sprintf(buf,"hostapd_cli -p /var/run/hostapd%d -i %s SET wpa 3",apIndex,interface_name);
+					sprintf(buf,"hostapd_cli -i %s SET wpa 3",interface_name);
 				}
 				else
 				{
@@ -775,10 +790,10 @@ void Dynamically_Updated_Security_Encryption_Modes_Hostapd_Process(int apIndex,c
 				}
 				system(buf);
 				memset(cmd,0,sizeof(cmd));
-				sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d -i %s SET wpa_pairwise %s",apIndex,interface_name,EncryptionMode);
+				sprintf(cmd,"hostapd_cli  -i %s SET wpa_pairwise %s",interface_name,EncryptionMode);
 				system(cmd);
 				memset(cmd,0,sizeof(cmd));
-				sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d -i %s SET rsn_pairwise %s",apIndex,interface_name,EncryptionMode);
+				sprintf(cmd,"hostapd_cli  -i %s SET rsn_pairwise %s",interface_name,EncryptionMode);
 				system(cmd);
 			}
 		}
@@ -787,18 +802,18 @@ void Dynamically_Updated_Security_Encryption_Modes_Hostapd_Process(int apIndex,c
 		{
 			if((strcmp(String,"TKIPEncryption") == 0) || (strcmp(String,"AESEncryption") == 0))
 			{
-				sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d -i %s SET wpa_pairwise CCMP",apIndex,interface_name);
+				sprintf(cmd,"hostapd_cli  -i %s SET wpa_pairwise CCMP",interface_name);
 				system(cmd);
 				memset(cmd,0,sizeof(cmd));
-				sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d -i %s SET rsn_pairwise CCMP",apIndex,interface_name);
+				sprintf(cmd,"hostapd_cli  -i %s SET rsn_pairwise CCMP",interface_name);
 				system(cmd);
 			}
 			else if(strcmp(String,"TKIPandAESEncryption") == 0)
 			{
-				sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d -i %s SET wpa_pairwise \"TKIP CCMP\"",apIndex,interface_name);
+				sprintf(cmd,"hostapd_cli  -i %s SET wpa_pairwise \"TKIP CCMP\"",interface_name);
 				system(cmd);
 				memset(cmd,0,sizeof(cmd));
-				sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d -i %s SET rsn_pairwise \"TKIP CCMP\"",apIndex,interface_name);
+				sprintf(cmd,"hostapd_cli  -i %s SET rsn_pairwise \"TKIP CCMP\"",interface_name);
 				system(cmd);
 			}
 			else
@@ -806,7 +821,7 @@ void Dynamically_Updated_Security_Encryption_Modes_Hostapd_Process(int apIndex,c
 				printf("Invalid Encrption Mode \n");
 			}
 			memset(cmd,0,sizeof(cmd));
-			sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d -i %s SET wpa %s",apIndex,interface_name,Security_type);
+			sprintf(cmd,"hostapd_cli -i %s SET wpa %s",interface_name,Security_type);
 			system(cmd);
 		}
 		else
@@ -816,7 +831,7 @@ void Dynamically_Updated_Security_Encryption_Modes_Hostapd_Process(int apIndex,c
 	}
 	else
 	{
-		sprintf(buf,"hostapd_cli -p /var/run/hostapd%d -i %s SET wpa jkn",apIndex,interface_name);
+		sprintf(buf,"hostapd_cli -i %s SET wpa jkn",interface_name);
 		system(buf);
 	}
 	if(strcmp(String,"None") == 0)
@@ -824,13 +839,13 @@ void Dynamically_Updated_Security_Encryption_Modes_Hostapd_Process(int apIndex,c
 	else
 	{
 		memset(cmd,0,sizeof(cmd));
-		sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d -i %s SET wpa_passphrase %s",apIndex,interface_name,password);
+		sprintf(cmd,"hostapd_cli -i %s SET wpa_passphrase %s",interface_name,password);
 		system(cmd);
 		memset(cmd,0,sizeof(cmd));
-		sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d -i %s SET wpa_key_mgmt WPA-PSK",apIndex,interface_name);
+		sprintf(cmd,"hostapd_cli -i %s SET wpa_key_mgmt WPA-PSK",interface_name);
 		system(cmd);
 	}
-	Dynamically_Disabling_hostapd_process(apIndex);
+	Dynamically_Disabling_hostapd_process(apIndex,TRUE);
 	Dynamically_Enabling_hostapd_process(apIndex);
 }
 
@@ -855,25 +870,25 @@ void Dynamically_Updated_Channel_Value_hostapd_process(INT apIndex,ULONG Value)
         {
                 printf("Invalid Index value \n");
         }
-        sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d -i %s SET channel %ld",apIndex,interface_name,Value);
+        sprintf(cmd,"hostapd_cli -i %s SET channel %ld",interface_name,Value);
         system(cmd);
         memset(cmd,0,sizeof(cmd));
 	if(apIndex == 0)
-        	sprintf(cmd,"hostapd_cli -p /var/run/hostapd4 -i %s SET channel %ld",Alias_interface_name,Value);
+        	sprintf(cmd,"hostapd_cli  -i %s SET channel %ld",Alias_interface_name,Value);
 	else
-        	sprintf(cmd,"hostapd_cli -p /var/run/hostapd5 -i %s SET channel %ld",Alias_interface_name,Value);
+        	sprintf(cmd,"hostapd_cli  -i %s SET channel %ld",Alias_interface_name,Value);
         system(cmd);
         memset(cmd,0,sizeof(cmd));
         if(apIndex == 0)
         {
                 wifi_getApEnable(0,&ssidenable_Pri);
-                Dynamically_Disabling_hostapd_process(apIndex);
+                Dynamically_Disabling_hostapd_process(apIndex,TRUE);
                 Dynamically_Enabling_hostapd_process(apIndex);
 		if(strcmp(xfinity_wifi,"1") == 0)
 		{
                 wifi_getApEnable(4,&ssidenable_Pub);
                 Stop_Start_Broadcasting_SSID_Names_Hostapd_Process(4,&ssidenable_Pub,Alias_interface_name);
-                Dynamically_Disabling_hostapd_process(4);
+                Dynamically_Disabling_hostapd_process(4,TRUE);
                 Dynamically_Enabling_hostapd_process(4);
 		if(ssidenable_Pub == 1)
 			system("brctl addif brlan2 gretap0.102");
@@ -882,13 +897,13 @@ void Dynamically_Updated_Channel_Value_hostapd_process(INT apIndex,ULONG Value)
         else if(apIndex == 1)
         {
                 wifi_getApEnable(1,&ssidenable_Pri);
-                Dynamically_Disabling_hostapd_process(apIndex);
+                Dynamically_Disabling_hostapd_process(apIndex,TRUE);
                 Dynamically_Enabling_hostapd_process(apIndex);
 		if(strcmp(xfinity_wifi,"1") == 0)
 		{
                 wifi_getApEnable(5,&ssidenable_Pub);
                 Stop_Start_Broadcasting_SSID_Names_Hostapd_Process(5,&ssidenable_Pub,Alias_interface_name);
-                Dynamically_Disabling_hostapd_process(5);
+                Dynamically_Disabling_hostapd_process(5,TRUE);
                 Dynamically_Enabling_hostapd_process(5);
 		if(ssidenable_Pub == 1)
                 	system("brctl addif brlan3 gretap0.103");
@@ -896,7 +911,7 @@ void Dynamically_Updated_Channel_Value_hostapd_process(INT apIndex,ULONG Value)
         }
         else
                 printf("Invalid index value \n");
-	
+
 	if(strcmp(xfinity_wifi,"1") == 0)
 	{
         if(ssidenable_Pub == 0)
@@ -909,7 +924,7 @@ void Dynamically_Updated_Channel_Value_hostapd_process(INT apIndex,ULONG Value)
         {
                 sprintf(cmd,"ifconfig %s down",interface_name);
                 system(cmd);
-        }
+        }	
 }
 
 void Dynamically_Enabling_And_Disabling_WPS_Support_Hostapd_Process(int apIndex,BOOL enable)
@@ -918,11 +933,11 @@ void Dynamically_Enabling_And_Disabling_WPS_Support_Hostapd_Process(int apIndex,
         char cmd[MAX_CMD_SIZE] = {0};
         GetInterfaceName_HostapdConf(apIndex,interface_name);
         if(enable == TRUE)
-                sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d -i %s SET wps_state 2",apIndex,interface_name);
+                sprintf(cmd,"hostapd_cli -i %s SET wps_state 2",interface_name);
         else
-                sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d -i %s SET wps_state 0",apIndex,interface_name);
+                sprintf(cmd,"hostapd_cli -i %s SET wps_state 0",interface_name);
         system(cmd);
-        Dynamically_Disabling_hostapd_process(apIndex);
+        Dynamically_Disabling_hostapd_process(apIndex,TRUE);
         Dynamically_Enabling_hostapd_process(apIndex);
 
 }
@@ -932,9 +947,9 @@ void Dynamically_Updated_WPS_ConfigMethods_Hostapd_process(int apIndex,char *Met
         char interface_name[10] = {0};
         char cmd[MAX_CMD_SIZE] = {0};
         GetInterfaceName_HostapdConf(apIndex,interface_name);
-        sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d -i %s SET config_methods \"%s\"",apIndex,interface_name,MethodString);
+        sprintf(cmd,"hostapd_cli -i %s SET config_methods \"%s\"",interface_name,MethodString);
         system(cmd);
-        Dynamically_Disabling_hostapd_process(apIndex);
+        Dynamically_Disabling_hostapd_process(apIndex,TRUE);
         Dynamically_Enabling_hostapd_process(apIndex);
 }
 
@@ -943,9 +958,9 @@ void Dynamically_Updated_WPS_ApPin_Hostapd_Process(int apIndex,ULONG pin)
         char interface_name[10] = {0};
         char cmd[MAX_CMD_SIZE] = {0};
         GetInterfaceName_HostapdConf(apIndex,interface_name);
-        sprintf(cmd,"hostapd_cli -p /var/run/hostapd%d -i %s SET ap_pin %ld",apIndex,interface_name,pin);
+        sprintf(cmd,"hostapd_cli -i %s SET ap_pin %ld",interface_name,pin);
         system(cmd);
-        Dynamically_Disabling_hostapd_process(apIndex);
+        Dynamically_Disabling_hostapd_process(apIndex,TRUE);
         Dynamically_Enabling_hostapd_process(apIndex);
 }
                                        
@@ -1002,9 +1017,14 @@ INT wifi_factoryReset()
 {
 	char cmd[128];
 	/*delete running hostapd conf files*/
-	wifi_dbg_printf("\n[%s]: deleting hostapd conf file %s and %s",__func__,HOSTAPD_CONF_0,HOSTAPD_CONF_1);
+	wifi_dbg_printf("\n[%s]: deleting hostapd conf file %s and %s\n",__func__,HOSTAPD_CONF_0,HOSTAPD_CONF_1);
 	sprintf(cmd, "rm -rf %s %s",HOSTAPD_CONF_0,HOSTAPD_CONF_1);
 	system(cmd);
+	system("rm -rf /var/Get*");
+	system("echo 1 > /var/Get2gRadioEnable.txt");
+	system("echo 1 > /var/Get5gRadioEnable.txt");
+	system("echo 1 > /var/Get2gssidEnable.txt");
+	system("echo 1 > /var/Get5gssidEnable.txt");
 	/*create new configuraion file from default configuration*/
 	if(RETURN_ERR == prepare_hostapd_conf())
 	{
@@ -1259,52 +1279,51 @@ void macfilter_init()
 // Initializes the wifi subsystem (all radios)
 INT wifi_init()                            //RDKB
 {
-    WIFI_ENTRY_EXIT_DEBUG("Inside %s:%d\n",__func__, __LINE__);
-    char interface[MAX_BUF_SIZE]={'\0'};
-    char bridge_name[MAX_BUF_SIZE]={'\0'};
-    INT len=0;
+	WIFI_ENTRY_EXIT_DEBUG("Inside  %s:%d\n",__func__, __LINE__);
+	char interface[MAX_BUF_SIZE]={'\0'};
+	char bridge_name[MAX_BUF_SIZE]={'\0'};
+	INT len=0;
 
-    macfilter_init();
-
-	/* preparing hostapd configuration*/
+	macfilter_init();
+	/*preparing hostapd configuration*/
 	if(RETURN_ERR == prepare_hostapd_conf())
 	{
 		return RETURN_ERR;
 	}
 
-    if( ( RETURN_ERR == _syscmd("syscfg get lan_ifname",bridge_name,sizeof(bridge_name)) ) || 
-        ( RETURN_ERR == _syscmd("iwconfig | grep -r \"IEEE 802.11\" | cut -d \" \" -f1 | tr '\n' ' '",interface,sizeof(interface)) ) )
-    {
+	if( ( RETURN_ERR == _syscmd("syscfg get lan_ifname",bridge_name,sizeof(bridge_name)) ) || 
+			( RETURN_ERR == _syscmd("iwconfig | grep -r \"IEEE 802.11\" | cut -d \" \" -f1 | tr '\n' ' '",interface,sizeof(interface)) ) )
+	{
 		return RETURN_ERR;
-    }
+	}
 
-    system("/usr/sbin/iw reg set US");
-    system("systemctl start hostapd.service");
-    sleep(2);//sleep to wait for hostapd to start
+	system("/usr/sbin/iw reg set US");
+	system("systemctl start hostapd.service");
+	sleep(2);//sleep to wait for hostapd to start
 
-    if((strlen(bridge_name) > 0) && (strlen(interface) > 0) )
-    {
-          /* Removing '\n' from bridge_name because syscfg get lan_ifname returns bridge name terminating with '\n'*/
-          len=strlen(bridge_name);
-          if(bridge_name[len-1]=='\n')
-          bridge_name[len-1]='\0';
+	if((strlen(bridge_name) > 0) && (strlen(interface) > 0) )
+	{
+		/* Removing '\n' from bridge_name because syscfg get lan_ifname returns bridge name terminating with '\n'*/
+		len=strlen(bridge_name);
+		if(bridge_name[len-1]=='\n')
+			bridge_name[len-1]='\0';
 
-          if(RETURN_ERR == add_ifnames_in_bridge(bridge_name,interface))
-          {
-              fprintf(stderr,"\nFailed to radio add interface in bridge\n");
-              return RETURN_ERR;
-          }
-    }
-    else
-    {
-        fprintf(stderr,"\n***Either bridge or Radio interfaces list are Empty***\n");
-        return RETURN_ERR;
-    }
-    #ifdef USE_HOSTAPD_STRUCT
-    read_hostapd_all_aps();
-    #endif
-    WIFI_ENTRY_EXIT_DEBUG("Exiting %s:%d\n",__func__, __LINE__);
-    return RETURN_OK;
+		if(RETURN_ERR == add_ifnames_in_bridge(bridge_name,interface))
+		{
+			fprintf(stderr,"\nFailed to radio add interface in bridge\n");
+			return RETURN_ERR;
+		}
+	}
+	else
+	{
+		fprintf(stderr,"\n***Either bridge or Radio interfaces list are Empty***\n");
+		return RETURN_ERR;
+	}
+#ifdef USE_HOSTAPD_STRUCT
+	read_hostapd_all_aps();
+#endif
+	WIFI_ENTRY_EXIT_DEBUG("Exiting %s:%d\n",__func__, __LINE__);
+	return RETURN_OK;
 }
 
 /* wifi_reset() function */
@@ -1336,7 +1355,7 @@ INT wifi_reset()
 	{
 		if((ap == 0) || (ap == 1) || (ap == 4) || (ap == 5))
 		{		  
-			Dynamically_Disabling_hostapd_process(ap);
+			Dynamically_Disabling_hostapd_process(ap,TRUE);
 			Dynamically_Enabling_hostapd_process(ap);
 		}
 	}
@@ -1584,25 +1603,25 @@ INT wifi_setRadioEnable(INT radioIndex, BOOL enable)            //RDKB
 		GetInterfaceName(Alias_Interface_name,"/nvram/hostapd4.conf");    	
 		if(enable == FALSE)
 		{
-			Dynamically_Disabling_hostapd_process(0);
+			Dynamically_Disabling_hostapd_process(0,FALSE);
 			if(strcmp(xfinity_wifi,"1") == 0)
 			{
 				Stop_Start_Broadcasting_SSID_Names_Hostapd_Process(4,&GetssidEnable_Pub,Alias_Interface_name);
-				Dynamically_Disabling_hostapd_process(4);
+				Dynamically_Disabling_hostapd_process(4,TRUE);
 				Dynamically_Enabling_hostapd_process(4);
-				Dynamically_Disabling_hostapd_process(4);
+				Dynamically_Disabling_hostapd_process(4,TRUE);
 				sprintf(cmd,"ifconfig %s down",Alias_Interface_name);
 				system(cmd);
 			}
 		}
 		else
 		{
-			Dynamically_Disabling_hostapd_process(0);
+			Dynamically_Disabling_hostapd_process(0,FALSE);
 			Dynamically_Enabling_hostapd_process(0);
 			if(strcmp(xfinity_wifi,"1") == 0)
 			{
 				Stop_Start_Broadcasting_SSID_Names_Hostapd_Process(4,&GetssidEnable_Pub,Alias_Interface_name);
-				Dynamically_Disabling_hostapd_process(4);
+				Dynamically_Disabling_hostapd_process(4,TRUE);
 				Dynamically_Enabling_hostapd_process(4);
 			if(GetssidEnable_Pub == 1)
 			{
@@ -1629,18 +1648,18 @@ INT wifi_setRadioEnable(INT radioIndex, BOOL enable)            //RDKB
 		GetInterfaceName(Alias_Interface_name,"/nvram/hostapd5.conf");
 		if(enable == FALSE)
 		{
-			Dynamically_Disabling_hostapd_process(1);
+			Dynamically_Disabling_hostapd_process(1,FALSE);
 			if(strcmp(xfinity_wifi,"1") == 0)
-				Dynamically_Disabling_hostapd_process(5);
+				Dynamically_Disabling_hostapd_process(5,FALSE);
 		}
 		else
 		{
-			Dynamically_Disabling_hostapd_process(1);
+			Dynamically_Disabling_hostapd_process(1,FALSE);
 			Dynamically_Enabling_hostapd_process(1);
 			if(strcmp(xfinity_wifi,"1") == 0)
 			{
 				Stop_Start_Broadcasting_SSID_Names_Hostapd_Process(5,&GetssidEnable_Pub,Alias_Interface_name);
-				Dynamically_Disabling_hostapd_process(5);
+				Dynamically_Disabling_hostapd_process(5,TRUE);
 				Dynamically_Enabling_hostapd_process(5);
 			if(GetssidEnable_Pub == 1)
 			{
@@ -2082,6 +2101,7 @@ INT wifi_setRadioChannelMode(INT radioIndex, CHAR *channelMode, BOOL gOnlyFlag, 
         }
         else if (strcmp (channelMode,"11ACVHT80") == 0)
         {
+                writeBandWidth(radioIndex,"80MHz");
                 wifi_setRadioOperatingChannelBandwidth(radioIndex,"80MHz");
                 printf("\nChannel Mode is 802.11ac-80MHz(5GHz)\n");
         }
@@ -2267,7 +2287,16 @@ INT wifi_setRadioChannel(INT radioIndex, ULONG channel)	//RDKB	//AP only
             break;
   }
   }
-  wifi_hostapdWrite(radioIndex,&list);
+  if(radioIndex == 0)
+  {
+  	wifi_hostapdWrite(0,&list);
+  	wifi_hostapdWrite(4,&list);
+  }
+  else
+  {
+  	wifi_hostapdWrite(1,&list);
+  	wifi_hostapdWrite(5,&list);
+  }
   list_free_param(&list);
   Dynamically_Updated_Channel_Value_hostapd_process(radioIndex,channel);
   WIFI_ENTRY_EXIT_DEBUG("Exiting %s:%d\n",__func__, __LINE__);
@@ -2639,7 +2668,7 @@ INT wifi_getRadioOperatingChannelBandwidth(INT radioIndex, CHAR *output_string) 
 	}
 	else if (strstr (output_buf,"3") != NULL)
 	{
-		strcpy(output_string,"80+80");
+		strcpy(output_string,"8080MHz");
 	}
         else
         {
@@ -2652,7 +2681,7 @@ INT wifi_getRadioOperatingChannelBandwidth(INT radioIndex, CHAR *output_string) 
 //Set the Operating Channel Bandwidth.
 INT wifi_setRadioOperatingChannelBandwidth(INT radioIndex, CHAR *output_string) //Tr181	//AP only
 {
-        WIFI_ENTRY_EXIT_DEBUG("Inside %s:%d\n",__func__, __LINE__);
+        WIFI_ENTRY_EXIT_DEBUG("Inside %s:%d : %s\n",__func__, __LINE__,output_string);
   	struct params params={'\0'};
  	param_list_t list;
 	char bw_value[10] = {0};
@@ -2683,10 +2712,10 @@ INT wifi_setRadioOperatingChannelBandwidth(INT radioIndex, CHAR *output_string) 
 		output_string="2";
 		writeBandWidth(radioIndex,"160MHz");
 	}
-	else if(strcmp(output_string,"80+80") == 0)
+	else if(strcmp(output_string,"8080MHz") == 0)
 	{
 		output_string="3";
-		writeBandWidth(radioIndex,"80+80");
+		writeBandWidth(radioIndex,"8080MHz");
 	}
 	else
 	{
@@ -2704,7 +2733,7 @@ INT wifi_setRadioOperatingChannelBandwidth(INT radioIndex, CHAR *output_string) 
   	}
   	wifi_hostapdWrite(radioIndex,&list);
   	list_free_param(&list);
-	readBandWidth(radioIndex,bw_value);
+	/*readBandWidth(radioIndex,bw_value);
 	if(radioIndex == 1) 
 	{
 		if((strcmp(bw_value,"20MHz") == 0) || (strcmp(bw_value,"40MHz") == 0))
@@ -2723,7 +2752,7 @@ INT wifi_setRadioOperatingChannelBandwidth(INT radioIndex, CHAR *output_string) 
 			wifi_hostapdWrite(radioIndex,&list);
 			list_free_param(&list);
 		}
-	}
+	}*/
 	DYnamically_Updated_OperatingChannelBandwidth(radioIndex,output_string);
 	WIFI_ENTRY_EXIT_DEBUG("Exiting %s:%d\n",__func__, __LINE__);
   	return RETURN_OK;
@@ -3292,9 +3321,6 @@ INT wifi_getRadioTrafficStats2(INT radioIndex, wifi_radioTrafficStats2_t *output
 
 		GetIfacestatus(public_interface_name, public_interface_status);
 
-		printf("private_interface_name %s private_interface_status %s \n", private_interface_name, private_interface_status);
-		printf("public_interface_name %s public_interface_status %s \n", public_interface_name, public_interface_status);
-
 		if (strcmp(private_interface_status, "1") == 0)
 			wifi_halGetIfStats(private_interface_name, &private_radioTrafficStats);
 		else
@@ -3611,13 +3637,6 @@ INT wifi_getBaseBSSID(INT ssidIndex, CHAR *output_string)	//RDKB
 //Get the MAC address associated with this Wifi SSID
 INT wifi_getSSIDMACAddress(INT ssidIndex, CHAR *output_string) //Tr181
 {
-	/*char cmd[128]={0};
-
-	  if (NULL == output_string) 
-	  return RETURN_ERR;
-
-	  sprintf(cmd, "ifconfig -a %s%d | grep HWaddr | tr -s " " | cut -d' ' -f5", AP_PREFIX, ssidIndex);
-	  _syscmd(cmd, output_string, 64);*/
 	wifi_getBaseBSSID(ssidIndex,output_string);
 	return RETURN_OK;
 }
@@ -4554,8 +4573,9 @@ INT wifi_getApNumDevicesAssociated(INT apIndex, ULONG *output_ulong)
 // manually removes any active wi-fi association with the device specified on this ap
 INT wifi_kickApAssociatedDevice(INT apIndex, CHAR *client_mac) 	
 {
-         char buf[126]={'\0'};
-         sprintf(buf,"hostapd_cli -p /var/run/hostapd%d disassociate %s",apIndex,client_mac);
+         char buf[126]={'\0'},interface_name[32];
+	 GetInterfaceName_HostapdConf(apIndex,interface_name);
+         sprintf(buf,"hostapd_cli -i%s disassociate %s",interface_name,client_mac);
          system(buf);
 
          return RETURN_OK;
@@ -4597,10 +4617,10 @@ INT wifi_getApDevicesAssociated(INT apIndex, CHAR *macArray, UINT buf_size)
        FILE *fp;
        char mac[258]= {'\0'};
        char buf[258]= {'\0'};
-       char tmp[258]= {'\0'};
+       char tmp[258]= {'\0'},interface_name[32];
        char *token=NULL;
-
-       sprintf(buf,"hostapd_cli -p /var/run/hostapd%d all_sta | grep dot11RSNAStatsSTAAddress",apIndex);
+       GetInterfaceName_HostapdConf(apIndex,interface_name);
+       sprintf(buf,"hostapd_cli -i%s all_sta | grep dot11RSNAStatsSTAAddress",interface_name);
        fp=popen(buf,"r");
        
        while(fgets(mac,sizeof(mac),fp) != NULL)
@@ -4816,13 +4836,13 @@ INT wifi_setPreferPrivateConnection(BOOL enable)
 	{
 		cur_enable = 0;
 		Stop_Start_Broadcasting_SSID_Names_Hostapd_Process(4,&cur_enable,interface_name);
-		Dynamically_Disabling_hostapd_process(4);
+		Dynamically_Disabling_hostapd_process(4,TRUE);
 		Dynamically_Enabling_hostapd_process(4);
 		sprintf(buf,"ifconfig %s down" ,interface_name);
 		system(buf);
 		memset(buf,0,sizeof(buf));
 		Stop_Start_Broadcasting_SSID_Names_Hostapd_Process(5,&cur_enable,Alias_Interface_name);
-		Dynamically_Disabling_hostapd_process(5);
+		Dynamically_Disabling_hostapd_process(5,TRUE);
 		Dynamically_Enabling_hostapd_process(5);
 		sprintf(buf,"ifconfig %s down" ,Alias_Interface_name);
 		system(buf);
@@ -4834,10 +4854,10 @@ INT wifi_setPreferPrivateConnection(BOOL enable)
 	{
 		cur_enable = 1;
 		Stop_Start_Broadcasting_SSID_Names_Hostapd_Process(4,&cur_enable,interface_name);
-		Dynamically_Disabling_hostapd_process(4);
+		Dynamically_Disabling_hostapd_process(4,TRUE);
 		Dynamically_Enabling_hostapd_process(4);
 		Stop_Start_Broadcasting_SSID_Names_Hostapd_Process(5,&cur_enable,Alias_Interface_name);
-		Dynamically_Disabling_hostapd_process(5);
+		Dynamically_Disabling_hostapd_process(5,TRUE);
 		Dynamically_Enabling_hostapd_process(5);
 	}
 	WIFI_ENTRY_EXIT_DEBUG("Exiting %s:%d\n",__func__, __LINE__);
@@ -4926,33 +4946,6 @@ INT wifi_createHostApdConfig(INT apIndex, BOOL createWpsCfg)
 // starts hostapd, uses the variables in the hostapd config with format compatible with the specific hostapd implementation
 INT wifi_startHostApd()
 {
-	char cmd[128] = {0};
-	char buf[1028] = {0};
-
-#if 0
-	_syscmd("iwconfig wlan0|grep 802.11a",buf,sizeof(buf));
-	if(strlen(buf) > 0)
-	{
-		system("sed -i 's/interface=wlan0/interface=wlan1/g' /nvram/hostapd0.conf");
-		system("sed -i 's/interface=wlan1/interface=wlan0/g' /nvram/hostapd1.conf");
-		_syscmd("hostapd -B /nvram/hostapd0.conf /nvram/hostapd1.conf",buf,sizeof(buf));
-	}
-	else
-	{
-		system("sed -i 's/interface=wlan1/interface=wlan0/g' /nvram/hostapd0.conf");
-		system("sed -i 's/interface=wlan0/interface=wlan1/g' /nvram/hostapd1.conf");
-		memset(buf,'\0',sizeof(buf));
-		_syscmd("iwconfig wlan1",buf,sizeof(buf));
-		if(strlen(buf)== 0)
-		{	
-			_syscmd("hostapd -B /nvram/hostapd0.conf",buf,sizeof(buf));
-		}
-		else
-		{
-			_syscmd("hostapd -B /nvram/hostapd0.conf /nvram/hostapd1.conf",buf,sizeof(buf));
-		}
-	}
-#endif
 	WIFI_ENTRY_EXIT_DEBUG("Inside %s:%d\n",__func__, __LINE__);
 	system("systemctl start hostapd.service");
         system("echo 1 > /var/Get2gssidEnable.txt");
@@ -5052,9 +5045,9 @@ INT wifi_setApEnable(INT apIndex, BOOL enable)
 					GetInterfaceName(interface_name,"/nvram/hostapd5.conf");
 				else
 					printf("Invalid Index value \n");
-				sprintf(command,"hostapd_cli  -p /var/run/hostapd%d -i %s SET ignore_broadcast_ssid 1",apIndex,interface_name);
+				sprintf(command,"hostapd_cli -i %s SET ignore_broadcast_ssid 1",interface_name);
 				system(command);
-				Dynamically_Disabling_hostapd_process(apIndex);
+				Dynamically_Disabling_hostapd_process(apIndex,TRUE);
 				Dynamically_Enabling_hostapd_process(apIndex);
 			}
 			}
@@ -5069,9 +5062,9 @@ INT wifi_setApEnable(INT apIndex, BOOL enable)
 				if(apIndex == 4)
 				{
 					GetInterfaceName(interface_name,"/nvram/hostapd4.conf");
-					sprintf(command,"hostapd_cli -p /var/run/hostapd4 -i %s SET ignore_broadcast_ssid 0",interface_name);
+					sprintf(command,"hostapd_cli -i %s SET ignore_broadcast_ssid 0",interface_name);
 					system(command);
-					Dynamically_Disabling_hostapd_process(4);
+					Dynamically_Disabling_hostapd_process(4,FALSE);
 					Dynamically_Enabling_hostapd_process(4);
 					system("brctl addif brlan2 gretap0.102");
 				}
@@ -5079,38 +5072,46 @@ INT wifi_setApEnable(INT apIndex, BOOL enable)
 				{
 					GetInterfaceName(interface_name,"/nvram/hostapd5.conf");
 					GetInterfaceName(IfName,"/nvram/hostapd1.conf");
-					sprintf(command,"hostapd_cli -p /var/run/hostapd5 -i %s SET ignore_broadcast_ssid 0",interface_name);
+					sprintf(command,"hostapd_cli -i %s SET ignore_broadcast_ssid 0",interface_name);
 					system(command);
 					wifi_getApEnable(1,&ssidenable);
 					printf("%s ..%s.. %d \n",__func__,command,ssidenable);
-					Dynamically_Disabling_hostapd_process(5);
+					Dynamically_Disabling_hostapd_process(5,FALSE);
 					Dynamically_Enabling_hostapd_process(5);
-					Dynamically_Disabling_hostapd_process(1);
+					Dynamically_Disabling_hostapd_process(1,FALSE);
 					Dynamically_Enabling_hostapd_process(1);
 					system("brctl addif brlan3 gretap0.103");
 				}
 				else
 					printf("Invalid Index value \n");
 			}
+			else
+			{
+				if(apIndex == 4)
+					system("echo 0 > /var/GetPub2gssidEnable.txt");
+				else if(apIndex == 5)	
+					system("echo 0 > /var/GetPub5gssidEnable.txt");
+
+			}	
 			if(apIndex == 0)
 			{
-				Dynamically_Disabling_hostapd_process(0);
+				Dynamically_Disabling_hostapd_process(0,FALSE);
 				Dynamically_Enabling_hostapd_process(0);
 			}
 			else if(apIndex == 1)
 			{
-				Dynamically_Disabling_hostapd_process(1);
+				Dynamically_Disabling_hostapd_process(1,FALSE);
 				Dynamically_Enabling_hostapd_process(1);
 				if(strcmp(xfinity_wifi,"1") == 0)
 				{
 					GetInterfaceName(IfName,"/nvram/hostapd5.conf");
 					wifi_getApEnable(5,&ssidenable);
 					if(ssidenable == 0)
-						sprintf(command,"hostapd_cli -p /var/run/hostapd5 -i %s SET ignore_broadcast_ssid 1",IfName);
+						sprintf(command,"hostapd_cli -i %s SET ignore_broadcast_ssid 1",IfName);
 					else
-						sprintf(command,"hostapd_cli -p /var/run/hostapd5 -i %s SET ignore_broadcast_ssid 0",IfName);
+						sprintf(command,"hostapd_cli -i %s SET ignore_broadcast_ssid 0",IfName);
 					system(command);
-					Dynamically_Disabling_hostapd_process(5);
+					Dynamically_Disabling_hostapd_process(5,TRUE);
 					Dynamically_Enabling_hostapd_process(5);
 					if(ssidenable == 1)
 						system("brctl addif brlan3 gretap0.103");
@@ -5134,11 +5135,11 @@ INT wifi_setApEnable(INT apIndex, BOOL enable)
 			{
 				if(GetRadioEnable == 0)
 				{
-					Dynamically_Disabling_hostapd_process(0);
+					Dynamically_Disabling_hostapd_process(0,FALSE);
 					GetInterfaceName(interface_name,"/nvram/hostapd4.conf");
-					sprintf(command,"hostapd_cli -p /var/run/hostapd%d -i %s SET ignore_broadcast_ssid 1",apIndex,interface_name);
+					sprintf(command,"hostapd_cli -i %s SET ignore_broadcast_ssid 1",interface_name);
 					system(command);
-					Dynamically_Disabling_hostapd_process(4);
+					Dynamically_Disabling_hostapd_process(4,TRUE);
 					Dynamically_Enabling_hostapd_process(4);
 					memset(command,0,sizeof(command));
 					sprintf(command,"ifconfig %s down", interface_name);
@@ -5149,8 +5150,8 @@ INT wifi_setApEnable(INT apIndex, BOOL enable)
 			{
 				if(GetRadioEnable == 0)
 				{
-					Dynamically_Disabling_hostapd_process(1);
-					Dynamically_Disabling_hostapd_process(5);
+					Dynamically_Disabling_hostapd_process(1,FALSE);
+					Dynamically_Disabling_hostapd_process(5,FALSE);
 				}
 			}
 			else
@@ -5160,7 +5161,7 @@ INT wifi_setApEnable(INT apIndex, BOOL enable)
 				BOOL cur_enable = 0;
 				GetInterfaceName(interface_name,"/nvram/hostapd4.conf");
 				Stop_Start_Broadcasting_SSID_Names_Hostapd_Process(4,&cur_enable,interface_name);
-				Dynamically_Disabling_hostapd_process(4);
+				Dynamically_Disabling_hostapd_process(4,TRUE);
 				Dynamically_Enabling_hostapd_process(4);
 				sprintf(command,"ifconfig %s down", interface_name);
 				system(command);
@@ -5168,7 +5169,7 @@ INT wifi_setApEnable(INT apIndex, BOOL enable)
 				memset(interface_name,0,sizeof(interface_name));
 				GetInterfaceName(interface_name,"/nvram/hostapd5.conf");
 				Stop_Start_Broadcasting_SSID_Names_Hostapd_Process(5,&cur_enable,interface_name);
-				Dynamically_Disabling_hostapd_process(5);
+				Dynamically_Disabling_hostapd_process(5,TRUE);
 				Dynamically_Enabling_hostapd_process(5);
 				sprintf(command,"ifconfig %s down", interface_name);
 				system(command);
@@ -6078,14 +6079,15 @@ INT wifi_getApWpsConfigurationState(INT apIndex, CHAR *output_string)
 {
         WIFI_ENTRY_EXIT_DEBUG("Inside %s:%d\n",__func__, __LINE__);
 	char cmd[64];
-	char buf[512]={0};
+	char buf[512]={0},interface_name[32];
 	char *pos=NULL;
 
 	snprintf(output_string, 64, "Not configured");
+        GetInterfaceName_HostapdConf(apIndex,interface_name);
 	if((apIndex == 0) || (apIndex == 1))
 	{
 
-	sprintf(cmd, "hostapd_cli -p /var/run/hostapd%d get_config",apIndex);
+	sprintf(cmd, "hostapd_cli -i%s get_config",interface_name);
 	_syscmd(cmd,buf, sizeof(buf));
 	
 	if((pos=strstr(buf, "wps_state="))!=NULL) {
@@ -6101,9 +6103,9 @@ INT wifi_getApWpsConfigurationState(INT apIndex, CHAR *output_string)
 INT wifi_setApWpsEnrolleePin(INT apIndex, CHAR *pin)
 {
 	char cmd[64];
-	char buf[256]={0};
+	char buf[256]={0},interface_name[32];
 	BOOL enable;
-
+        GetInterfaceName_HostapdConf(apIndex,interface_name);
 	if((apIndex == 0) || (apIndex == 1))
 	{
 	wifi_getApEnable(apIndex, &enable);
@@ -6114,7 +6116,7 @@ INT wifi_setApWpsEnrolleePin(INT apIndex, CHAR *pin)
 	if (!enable) 
 		return RETURN_ERR; 
 
-	snprintf(cmd, 64, "hostapd_cli -p /var/run/hostapd%d wps_pin any %s",apIndex, pin);
+	snprintf(cmd, 64, "hostapd_cli -i %s wps_pin any %s",interface_name, pin);
 	_syscmd(cmd,buf, sizeof(buf));
 	
 	if((strstr(buf, "OK"))!=NULL) 
@@ -6129,9 +6131,9 @@ INT wifi_setApWpsEnrolleePin(INT apIndex, CHAR *pin)
 INT wifi_setApWpsButtonPush(INT apIndex)
 {
 	char cmd[64];
-	char buf[256]={0};
+	char buf[256]={0},interface_name[32];
 	BOOL enable;
-
+	GetInterfaceName_HostapdConf(apIndex,interface_name);
 	if((apIndex == 0) || (apIndex == 1))
 	{
 	wifi_getApEnable(apIndex, &enable);
@@ -6142,7 +6144,7 @@ INT wifi_setApWpsButtonPush(INT apIndex)
 	if (!enable) 
 		return RETURN_ERR; 
 
-	snprintf(cmd, 64, "hostapd_cli -p /var/run/hostapd%d wps_pbc",apIndex);
+	snprintf(cmd, 64, "hostapd_cli -i %s wps_pbc",interface_name);
 	_syscmd(cmd,buf, sizeof(buf));
 	
 	if((strstr(buf, "OK"))!=NULL) 
@@ -6157,9 +6159,9 @@ INT wifi_setApWpsButtonPush(INT apIndex)
 INT wifi_cancelApWPS(INT apIndex)
 {
 	char cmd[64];
-	char buf[256]={0};
+	char buf[256]={0},interface_name[32];
 	BOOL enable;
-
+	GetInterfaceName_HostapdConf(apIndex,interface_name);
 	if((apIndex == 0) || (apIndex == 1))
         {
         wifi_getApEnable(apIndex, &enable);
@@ -6170,7 +6172,7 @@ INT wifi_cancelApWPS(INT apIndex)
         if (!enable)
                 return RETURN_ERR;
 
-	snprintf(cmd, 64, "hostapd_cli -p /var/run/hostapd%d wps_cancel",apIndex);
+	snprintf(cmd, 64, "hostapd_cli -i%s wps_cancel",interface_name);
 	_syscmd(cmd,buf, sizeof(buf));
 	
 	if((strstr(buf, "OK"))!=NULL) 
@@ -6186,14 +6188,18 @@ INT wifi_cancelApWPS(INT apIndex)
 INT wifi_getApAssociatedDeviceDiagnosticResult(INT apIndex, wifi_associated_dev_t **associated_dev_array, UINT *output_array_size)
 {
 	INT ret = RETURN_OK;
-	WIFI_ENTRY_EXIT_DEBUG("Inside %s:%d\n",__func__, __LINE__);
+	//WIFI_ENTRY_EXIT_DEBUG("Inside %s:%d\n",__func__, __LINE__);
+	if((apIndex == 0) || (apIndex == 1))
+	{	
 	ret = rpi_getApAssociatedDeviceDiagnosticResult(apIndex, associated_dev_array, output_array_size);
 	if(ret == RETURN_ERR)
 		printf("func[%s], apIndex[%d] ret[%d] associated_dev_array[%p] dev_cnt[%d]\n",
 				__FUNCTION__, apIndex, ret, *associated_dev_array, *output_array_size);
 
-	WIFI_ENTRY_EXIT_DEBUG("Exiting %s:%d\n",__func__, __LINE__);
+	//WIFI_ENTRY_EXIT_DEBUG("Exiting %s:%d\n",__func__, __LINE__);
+	}
 	return ret;
+
 }
 
 INT wifi_getApAssociatedDeviceDiagnosticResult3(INT apIndex, wifi_associated_dev3_t **associated_dev_array, UINT *output_array_size)
@@ -6767,7 +6773,7 @@ INT wifi_getRadioUpTime(INT radioIndex, ULONG *output)
 {
 	INT status = RETURN_ERR;
 	*output = 0;
-	return RETURN_ERR;
+	return RETURN_OK;
 }
 
 INT wifi_getApEnableOnLine(INT wlanIndex, BOOL *enabled)
@@ -7248,7 +7254,6 @@ INT wifi_getRadioPercentageTransmitPower(INT radioIndex, ULONG *output_ulong)
 }
 INT wifi_setBSSTransitionActivation(UINT apIndex, BOOL activate)
 {
-	printf("%s:%d:%d\n",__FUNCTION__,activate,apIndex);
 	if((apIndex == 0) || (apIndex == 1))
 	{
 	char config_file[MAX_BUF_SIZE] = {0};
@@ -7290,12 +7295,6 @@ void wifi_apAuthEvent_callback_register(wifi_apAuthEvent_callback callback_proc)
 INT wifi_getVAPTelemetry(UINT apIndex, wifi_VAPTelemetry_t *telemetry)
 {
 	return RETURN_OK;
-}
-
-void wifi_apDisassociatedDevice_callback_register(wifi_apDisassociatedDevice_callback callback_proc)
-{
-    // TODO Implement me!
-    return RETURN_OK;
 }
 
 INT wifi_pushRadioChannel2(INT radioIndex, UINT channel, UINT channel_width_MHz, UINT csa_beacon_count)
@@ -7356,7 +7355,7 @@ INT wifi_getSSIDNameStatus(INT apIndex, CHAR *output_string)
 		return RETURN_ERR;
 	sprintf(conf_file,"%s%d.conf",CONFIG_PREFIX,apIndex);
 	GetInterfaceName(interface_name,conf_file);	
-	snprintf(cmd, sizeof(cmd), "hostapd_cli -p/var/run/hosatpd%d -i%s get_config | grep ^ssid | cut -d '=' -f2 | tr -d '\n'", apIndex,interface_name);
+	snprintf(cmd, sizeof(cmd), "hostapd_cli -i%s get_config | grep ^ssid | cut -d '=' -f2 | tr -d '\n'",interface_name);
 	_syscmd(cmd, buf, sizeof(buf));
 
 	//size of SSID name restricted to value less than 32 bytes
@@ -7443,7 +7442,7 @@ INT wifi_getApAssociatedDeviceStats(
 	GetInterfaceName(interface_name,conf_file);	
 
 	sprintf(mac_str, "%x:%x:%x:%x:%x:%x", (*clientMacAddress)[0],(*clientMacAddress)[1],(*clientMacAddress)[2],(*clientMacAddress)[3],(*clientMacAddress)[4],(*clientMacAddress)[5]);
-	sprintf(cmd,"iw dev %s station get %s | grep 'rx\\|tx' | tr -d '\t'", interface_name, mac_str);
+	sprintf(cmd,"iw dev %s station get %s | grep \"rx\\|tx\" | tr -d '\t'", interface_name, mac_str);
 	if((f = popen(cmd, "r")) == NULL) {
 		wifi_dbg_printf("%s: popen %s error\n", __func__, cmd);
 		return RETURN_ERR;

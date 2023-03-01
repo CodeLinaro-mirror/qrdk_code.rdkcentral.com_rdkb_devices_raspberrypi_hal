@@ -282,7 +282,6 @@ INT wifi_setApWpsConfiguration(INT apIndex, wifi_wps_t* wpsConfig)
 INT wifi_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
 {
 	int i, apIndex, ret,enable,acl_mode;
-	printf("%s radioIndex = %d\n", __FUNCTION__, index);
 	for (i = 0; i < map->num_vaps; i++) 
 	{
 		apIndex = map->vap_array[i].vap_index;
@@ -304,10 +303,6 @@ INT wifi_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
 			printf("%s:wifi_setSSIDEnable failed, apIndex=[%d]\n",
 					__FUNCTION__, apIndex);
 			return RETURN_ERR;
-		}
-		if (!map->vap_array[i].u.bss_info.enabled)
-		{
-			continue;
 		}
 		ret = wifi_setSSIDName(apIndex,map->vap_array[i].u.bss_info.ssid);
 		if (ret != RETURN_OK) {
@@ -408,8 +403,8 @@ INT rpi_getRadioCapabilities(int radioIndex, wifi_radio_capabilities_t *rcap)
 		GetInterfaceName(rcap->ifaceName,"/nvram/hostapd0.conf");
 		rcap->band[radioIndex] = WIFI_FREQUENCY_2_4_BAND;
 		rcap->mode[radioIndex] = WIFI_80211_VARIANT_G | WIFI_80211_VARIANT_N;
-		rcap->channelWidth[radioIndex] |= (WIFI_CHANNELBANDWIDTH_20MHZ | WIFI_CHANNELBANDWIDTH_40MHZ);
 		rcap->maxBitRate[radioIndex] = 144;
+		rcap->channelWidth[radioIndex]= WIFI_CHANNELBANDWIDTH_20MHZ | WIFI_CHANNELBANDWIDTH_40MHZ;
 		rcap->supportedBitRate[radioIndex] |= (WIFI_BITRATE_1MBPS | WIFI_BITRATE_2MBPS |
                                 WIFI_BITRATE_5_5MBPS | WIFI_BITRATE_6MBPS | WIFI_BITRATE_9MBPS |
                                 WIFI_BITRATE_11MBPS | WIFI_BITRATE_12MBPS);
@@ -419,13 +414,14 @@ INT rpi_getRadioCapabilities(int radioIndex, wifi_radio_capabilities_t *rcap)
 		GetInterfaceName(rcap->ifaceName,"/nvram/hostapd1.conf");
 		rcap->band[radioIndex] = WIFI_FREQUENCY_5_BAND;
 		rcap->mode[radioIndex] = WIFI_80211_VARIANT_AC;
-		rcap->channelWidth[radioIndex] = WIFI_CHANNELBANDWIDTH_40MHZ;
 		rcap->maxBitRate[radioIndex] = 300;
+		rcap->channelWidth[radioIndex]= WIFI_CHANNELBANDWIDTH_20MHZ | WIFI_CHANNELBANDWIDTH_40MHZ | WIFI_CHANNELBANDWIDTH_80MHZ;
 		rcap->supportedBitRate[radioIndex] |= (WIFI_BITRATE_6MBPS | WIFI_BITRATE_9MBPS |
                                 WIFI_BITRATE_12MBPS | WIFI_BITRATE_18MBPS | WIFI_BITRATE_24MBPS |
                                 WIFI_BITRATE_36MBPS | WIFI_BITRATE_48MBPS | WIFI_BITRATE_54MBPS);
 
 	}
+
 	memset(possiblechannels,0,sizeof(possiblechannels));
 	ret=wifi_getRadioPossibleChannels(radioIndex,possiblechannels);
 	if (ret != RETURN_OK)
@@ -681,7 +677,6 @@ INT wifi_getRadioVapInfoMap(wifi_radio_index_t index, wifi_vap_info_map_t *map)
 			return RETURN_ERR;
 		}
 		map->vap_array[i].u.bss_info.enabled = enabled;
-		printf("%s SSID Enable status %d : %d : %d\n",__FUNCTION__,vap_index,enabled,map->vap_array[i].u.bss_info.enabled);
 		ret=wifi_getApSsidAdvertisementEnable(vap_index, &enabled);
 		if (ret != RETURN_OK)
 		{
@@ -798,7 +793,6 @@ INT wifi_getRadioOperatingParameters(wifi_radio_index_t index, wifi_radio_operat
 	UINT basicDataTransmitRates,operationalDataTransmitRates;
 
 	WIFI_ENTRY_EXIT_DEBUG("Inside %s:%d\n",__func__, __LINE__);
-	printf("Entering %s index = %d\n", __func__, (int)index);
 	memset(operationParam, 0, sizeof(wifi_radio_operationParam_t));
 	
 	ret = wifi_getRadioEnable(index, &enabled);
@@ -835,10 +829,11 @@ INT wifi_getRadioOperatingParameters(wifi_radio_index_t index, wifi_radio_operat
 	}
 	memset(buf, 0, sizeof(buf));
 	ret = wifi_getRadioOperatingChannelBandwidth(index, buf); // XXX: handle errors
-	// XXX: only handle 20/40/80 modes for now
 	if (!strcmp(buf, "20MHz")) operationParam->channelWidth = WIFI_CHANNELBANDWIDTH_20MHZ;
 	else if (!strcmp(buf, "40MHz")) operationParam->channelWidth = WIFI_CHANNELBANDWIDTH_40MHZ;
 	else if (!strcmp(buf, "80MHz")) operationParam->channelWidth = WIFI_CHANNELBANDWIDTH_80MHZ;
+	else if (!strcmp(buf, "160MHz")) operationParam->channelWidth = WIFI_CHANNELBANDWIDTH_160MHZ;
+	else if (!strcmp(buf, "8080MHz")) operationParam->channelWidth = WIFI_CHANNELBANDWIDTH_80_80MHZ;
 	else
 	{
 		printf("Unknown HT mode: %s\n", buf);
@@ -909,17 +904,15 @@ INT wifi_setRadioOperatingParameters(wifi_radio_index_t index, wifi_radio_operat
 		printf("wifi_setRadioAutoChannelEnable failed..radioIndex[%d]\n",index);
 		//return RETURN_ERR;
 	}
-	printf("%s: radioIndex = %d, AutoChannelEnabled=%d\n",
-			__FUNCTION__, index, enable);
-	if (operationParam->channelWidth == 1) 
+	if ((operationParam->channelWidth == 1) || (operationParam->channelWidth == 0))
 		strcpy(ChannelWidth,"20MHz");
 	else if (operationParam->channelWidth == 2) 
 		strcpy(ChannelWidth,"40MHz");
-	else if (operationParam->channelWidth == 3) 
-		strcpy(ChannelWidth,"80MHz");
 	else if (operationParam->channelWidth == 4) 
+		strcpy(ChannelWidth,"80MHz");
+	else if (operationParam->channelWidth == 8) 
 		strcpy(ChannelWidth,"160MHz");
-	else if (operationParam->channelWidth == 5) 
+	else if (operationParam->channelWidth == 10) 
 		strcpy(ChannelWidth,"8080MHz");
 	if( wifi_setRadioOperatingChannelBandwidth(index,ChannelWidth) != RETURN_OK)
 	{
