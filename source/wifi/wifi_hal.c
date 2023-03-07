@@ -5252,27 +5252,52 @@ INT wifi_getApEnable(INT apIndex, BOOL *output_bool)
 }
 
 // Outputs the AP "Enabled" "Disabled" status from driver 
-INT wifi_getApStatus(INT apIndex, CHAR *output_string) 
+INT wifi_getApStatus(INT apIndex, CHAR *output_string)
 {
-	char cmd[128] = {0};
-	char buf[128] = {0};
-	INT  wlanIndex;
-	BOOL output_bool;
-	if ( NULL == output_string)
-	{
-		return RETURN_ERR;
-	}
-	else
-	{
-		wifi_getApEnable(apIndex,&output_bool);
-	}
-
-	if(output_bool == 1) 
-		snprintf(output_string, 32, "Up");
-	else
-		snprintf(output_string, 32, "Disable");
-	return RETURN_OK;
+       WIFI_ENTRY_EXIT_DEBUG("Inside %s:%d\n",__func__, __LINE__);
+        BOOL output_bool;
+        if((apIndex == 0) || (apIndex == 1) || (apIndex == 4) || (apIndex == 5))
+        {
+        if ( NULL == output_string)
+        {
+                return RETURN_ERR;
+        }
+        else
+        {
+               wifi_getSSIDEnable(apIndex, &output_bool);
+               if ( output_bool == 1)
+               {
+                       if ((apIndex == 0) || (apIndex == 4))
+                       {
+                               wifi_getRadioEnable(0, &output_bool);
+                       }
+                       else
+                       {
+                               wifi_getRadioEnable(1, &output_bool);
+                       }
+                       if(output_bool == 1)
+                       {
+                               snprintf(output_string, 32, "Up");
+                       }
+                       else
+                       {
+                               snprintf(output_string, 32, "Disable");
+                       }
+               }
+               else
+               {
+                       snprintf(output_string, 32, "Disable");
+               }
+       }
+       }
+       else
+       {
+               snprintf(output_string, 32, "Disable");
+       }
+       WIFI_ENTRY_EXIT_DEBUG("Exiting %s:%d\n",__func__, __LINE__);
+       return RETURN_OK;
 }
+
 
 //Indicates whether or not beacons include the SSID name.
 // outputs a 1 if SSID on the AP is enabled, else ouputs 0
