@@ -613,7 +613,6 @@ INT wifi_getRadioVapInfoMap(wifi_radio_index_t index, wifi_vap_info_map_t *map)
 	INT mode;
 	char security_mode[128] = {'\0'}, encryption[128] = {'\0'},mfpstr[128] = {'\0'};
 	map->num_vaps = MAX_NUM_VAP_PER_RADIO; // XXX: For both radio let's support 2 vaps for now
-	map->vap_array[index].radio_index = index;
 	//      private and public wifi support only available now
 	WIFI_ENTRY_EXIT_DEBUG("Inside %s:%d\n",__func__, __LINE__);
 	printf("Entering %s index = %d\n", __func__, (int)index);
@@ -724,6 +723,7 @@ INT wifi_getRadioVapInfoMap(wifi_radio_index_t index, wifi_vap_info_map_t *map)
 			return RETURN_ERR;
 		}
 
+		map->vap_array[i].radio_index = index;
 		ret=wifi_getApSecurityKeyPassphrase(vap_index,map->vap_array[i].u.bss_info.security.u.key.key);
 		if(ret == RETURN_OK)
 		{
