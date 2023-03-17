@@ -286,7 +286,7 @@ CcspHalEthSwGetPortStatus
     )
 {
   char *path;
-  path = (char *)malloc(20);
+
   path="/sys/class/net/eth1";
 
   int eth_if = is_interface_exists(path);
@@ -500,45 +500,32 @@ CcspHalEthSwGetPortAdminStatus
         PCCSP_HAL_ETHSW_ADMIN_STATUS  pAdminStatus
     )
 {
- CcspHalEthSwTrace(("port id %d", PortId));
-  int port_num = 0;
-  FILE *fp;
-  char port_id[150];
-  char *val = "/1-1.";
-  char *val1 = "/1-1.1.";
-  char *p = NULL;
+    FILE *fp;
+    char port_id[256], *val1="/1-1.1.", *val= "/1-1.", *p, *next;
+    int port_num=0;
 
-  char *path;
-  path = (char *)malloc(20);
-  path="/sys/class/net/eth1";
+    CcspHalEthSwTrace(("port id %d", PortId));
 
-  int eth_if = is_interface_exists(path);
-
-  if(eth_if==0)
-  return  RETURN_ERR;
-
-  fp= popen("ls -la /sys/class/net/ | awk '/eth1/{portId=$11}   END {print portId}'","r");
-  fgets(port_id,sizeof(port_id),fp);
-  if (strstr(port_id,val1)){
-        p = strstr(port_id,val1);
-        p = strtok(p,".");
-        p = strtok(NULL,".");
-        p = strtok(NULL,"/");
+    fp = popen("readlink -f /sys/class/net/eth1", "r");
+    fgets(port_id, sizeof(port_id), fp);
+    if((p=strstr(port_id, val1))){
+        strtok_r(p, ".", &next);
+        strtok_r(next, ".", &next);
+        p = strtok_r(next, "/", &next);
         port_num = atoi(p);
-        if (port_num == 2)
-                port_num = port_num + 2;
-        else
-                port_num = port_num;
-  }
-  else{
-        p = strstr(port_id,val);
-        p = strtok(p,".");
-        p = strtok(NULL,"/");
+        if(port_num == 2)
+            port_num += 2;
+    }
+    else if((p = strstr(port_id, val))){
+        strtok_r(p, ".", &next);
+        p = strtok_r(next, "/", &next);
         port_num = atoi(p);
-        port_num = port_num - 1;
-  }
+        port_num--;
+    }
+    else
+        printf("string not matching\n");
 
-   switch (PortId)
+    switch (PortId)
     {
         case CCSP_HAL_ETHSW_EthPort1:
         case CCSP_HAL_ETHSW_EthPort2:
@@ -546,17 +533,17 @@ CcspHalEthSwGetPortAdminStatus
         case CCSP_HAL_ETHSW_EthPort4:
         {
         if(port_num==PortId)
-             *pAdminStatus   = CCSP_HAL_ETHSW_AdminUp;
+             *pAdminStatus = CCSP_HAL_ETHSW_AdminUp;
         else
-             *pAdminStatus   = CCSP_HAL_ETHSW_AdminDown;
+             *pAdminStatus = CCSP_HAL_ETHSW_AdminDown;
             break;
         }
         default:
             CcspHalEthSwTrace(("Unsupported port id %d", PortId));
             return  RETURN_ERR;
     }
-if(admin_status)
-       *pAdminStatus   = CCSP_HAL_ETHSW_AdminDown;
+    if(admin_status)
+        *pAdminStatus = CCSP_HAL_ETHSW_AdminDown;
 
   return  RETURN_OK;
 }
