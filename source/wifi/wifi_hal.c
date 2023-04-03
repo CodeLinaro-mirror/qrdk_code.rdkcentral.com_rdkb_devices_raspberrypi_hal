@@ -7609,22 +7609,178 @@ INT wifi_getApAssociatedDevice(INT apIndex, CHAR *output_buf, INT output_buf_siz
 /* multi-psk support */
 INT wifi_getMultiPskClientKey(INT apIndex, mac_address_t mac, wifi_key_multi_psk_t *key)
 {
-	return RETURN_OK;
+    char cmd[256],interface_name[10];
+    GetInterfaceName_HostapdConf(apIndex,interface_name);  	
+    sprintf(cmd, "hostapd_cli -i %s sta %x:%x:%x:%x:%x:%x |grep '^keyid' | cut -f 2 -d = | tr -d '\n'",
+        interface_name,
+        mac[0],
+        mac[1],
+        mac[2],
+        mac[3],
+        mac[4],
+        mac[5]
+    );
+    printf("DEBUG LOG wifi_getMultiPskClientKey(%s)\n",cmd);
+    _syscmd(cmd, key->wifi_keyId, 64);
+    return RETURN_OK;
 }
+
 INT wifi_pushMultiPskKeys(INT apIndex, wifi_key_multi_psk_t *keys, INT keysNumber)
 {
-	return RETURN_OK;
+    FILE *fd      = NULL;
+    char fname[100];
+    char cmd[128] = {0},interface_name[10];
+    char out[64] = {0};
+    wifi_key_multi_psk_t * key = NULL;
+    if(keysNumber < 0)
+            return RETURN_ERR;
+
+    snprintf(fname, sizeof(fname), "/tmp/hostapd%d.psk", apIndex);
+    fd = fopen(fname, "w");
+    if (!fd) {
+            return RETURN_ERR;
+    }
+    key= (wifi_key_multi_psk_t *) keys;
+    for(int i=0; i<keysNumber; ++i, key++) {
+        fprintf(fd, "keyid=%s 00:00:00:00:00:00 %s\n", key->wifi_keyId, key->wifi_psk);
+    }
+    fclose(fd);
+
+    GetInterfaceName_HostapdConf(apIndex,interface_name);  	
+    //reload file
+    sprintf(cmd, "hostapd_cli -i%s raw RELOAD_WPA_PSK", interface_name);
+    _syscmd(cmd, out, 64);
+    return RETURN_OK;
 }
+
 INT wifi_getMultiPskKeys(INT apIndex, wifi_key_multi_psk_t *keys, INT keysNumber)
 {
-	return RETURN_OK;
+    FILE *fd      = NULL;
+    char fname[100];
+    char * line = NULL;
+    char * pos = NULL;
+    size_t len = 0;
+    ssize_t read = 0;
+    INT ret = RETURN_OK;
+    wifi_key_multi_psk_t *keys_it = NULL;
+
+    if (keysNumber < 1) {
+        return RETURN_ERR;
+    }
+
+    snprintf(fname, sizeof(fname), "/tmp/hostapd%d.psk", apIndex);
+    fd = fopen(fname, "r");
+    if (!fd) {
+        return RETURN_ERR;
+    }
+
+    if (keys == NULL) {
+        ret = RETURN_ERR;
+        goto close;
+    }
+
+    keys_it = keys;
+    while ((read = getline(&line, &len, fd)) != -1) {
+        //Strip trailing new line if present
+        if (read > 0 && line[read-1] == '\n') {
+            line[read-1] = '\0';
+        }
+
+        if(strcmp(line,"keyid=")) {
+            sscanf(line, "keyid=%s", &(keys_it->wifi_keyId));
+            if (!(pos = index(line, ' '))) {
+                ret = RETURN_ERR;
+                goto close;
+            }
+            pos++;
+            //Here should be 00:00:00:00:00:00
+            if (!(strcmp(pos,"00:00:00:00:00:00"))) {
+                 printf("Not supported MAC: %s\n", pos);
+            }
+            if (!(pos = index(pos, ' '))) {
+                ret = RETURN_ERR;
+                goto close;
+            }
+            pos++;
+
+            //The rest is PSK
+            snprintf(&keys_it->wifi_psk[0], sizeof(keys_it->wifi_psk), "%s", pos);
+            keys_it++;
+
+            if(--keysNumber <= 0)
+               break;
+        }
+    }
+
+close:
+    free(line);
+    fclose(fd);
+    return ret;
 }
+/* end of multi-psk support */
+
 INT wifi_setNeighborReports(UINT apIndex,
                              UINT numNeighborReports,
                              wifi_NeighborReport_t *neighborReports)
 {
-	return RETURN_OK;
+    char cmd[256] = { 0 };
+    char hex_bssid[13] = { 0 };
+    char bssid[18] = { 0 };
+    char nr[256] = { 0 };
+    char ssid[256];
+    char hex_ssid[256],interface_name[10];
+    INT ret;
+
+    GetInterfaceName_HostapdConf(apIndex,interface_name);  	
+
+    for(unsigned int i = 0; i < numNeighborReports; i++)
+    {
+        memset(ssid, 0, sizeof(ssid));
+        ret = wifi_getSSIDName(apIndex, ssid);
+        if (ret != RETURN_OK)
+            return RETURN_ERR;
+
+        memset(hex_ssid, 0, sizeof(hex_ssid));
+        for(size_t j = 0,k = 0; ssid[j] != '\0' && k < sizeof(hex_ssid); j++,k+=2 )
+            sprintf(hex_ssid + k,"%02x", ssid[j]);
+
+        snprintf(hex_bssid, sizeof(hex_bssid),
+                "%02hhx%02hhx%02hhx%02hhx%02hhx%02hhx",
+                neighborReports[i].bssid[0], neighborReports[i].bssid[1], neighborReports[i].bssid[2], neighborReports[i].bssid[3], neighborReports[i].bssid[4], neighborReports[i].bssid[5]);
+        snprintf(bssid, sizeof(bssid),
+                "%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx",
+                neighborReports[i].bssid[0], neighborReports[i].bssid[1], neighborReports[i].bssid[2], neighborReports[i].bssid[3], neighborReports[i].bssid[4], neighborReports[i].bssid[5]);
+
+        snprintf(nr, sizeof(nr),
+                "%s"                                    // bssid
+                "%02hhx%02hhx%02hhx%02hhx"              // bssid_info
+                "%02hhx"                                // operclass
+                "%02hhx"                                // channel
+                "%02hhx",                               // phy_mode
+                hex_bssid,
+                neighborReports[i].info & 0xff, (neighborReports[i].info >> 8) & 0xff,
+                (neighborReports[i].info >> 16) & 0xff, (neighborReports[i].info >> 24) & 0xff,
+                neighborReports[i].opClass,
+                neighborReports[i].channel,
+                neighborReports[i].phyTable);
+
+        snprintf(cmd, sizeof(cmd),
+                "hostapd_cli set_neighbor "
+                "%s "                        // bssid
+                "ssid=%s "                   // ssid
+                "nr=%s "                    // nr
+                "-i %s",
+                bssid,hex_ssid,nr,interface_name);
+
+        if (WEXITSTATUS(system(cmd)) != 0)
+        {
+            wifi_dbg_printf("\n[%s]: %s failed",__func__,cmd);
+        }
+    }
+
+    return RETURN_OK;
 }
+
 INT wifi_setZeroDFSState(UINT radioIndex, BOOL enable, BOOL precac)
 {
      //Zero-wait DFS not supported
