@@ -382,17 +382,11 @@ Bound                 = 5
 */
 INT dhcpv4c_get_ert_fsm_state(INT *pValue)
 {
-    if(pValue==NULL)
-    {    
-           *pValue = 1;
-           return STATUS_FAILURE;
-    }
-    else
-    {
-           *pValue = 5; //5 indicates that status is bound. Client gets Ip addrs and changes its state to bound.
-            return STATUS_SUCCESS;
-       //return dhcp4c_get_ert_fsm_state(pValue);
-    }
+    if(!pValue)
+        return STATUS_FAILURE;
+    *pValue = 5; //5 indicates that status is bound. Client gets Ip addrs and changes its state to bound.
+
+    return STATUS_SUCCESS;
 }
 
 /* dhcpv4c_get_ert_ip_addr() function */
