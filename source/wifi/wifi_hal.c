@@ -151,6 +151,15 @@ void GetInterfaceName(char *interface_name, char *conf_file)
         pclose(fp);
 }
 
+INT getCurrenttime (ULONG *time)
+{
+   FILE * fp = popen("cat /proc/uptime | cut -d ' ' -f1", "r");
+   if ( !fp )
+       return -1;
+   fscanf(fp,"%lu",time);
+   pclose(fp);
+   return 0;
+}
 
 int _syscmd(char *cmd, char *retBuf, int retBufSize)
 {
@@ -6796,9 +6805,27 @@ INT wifi_pushSsidAdvertisementEnable(INT apIndex, BOOL enable)
 
 INT wifi_getRadioUpTime(INT radioIndex, ULONG *output)
 {
-	INT status = RETURN_ERR;
-	*output = 0;
-	return RETURN_OK;
+    INT status = RETURN_ERR;
+    BOOL output_bool = FALSE;
+    char buf[MAX_BUF_SIZE] = {0};
+    char cmd[MAX_CMD_SIZE] = {0},interface_name[10];
+    ULONG radio_uptime = 0,current_time = 0;
+    status = wifi_getRadioEnable(radioIndex, &output_bool);  //check radio
+    if((status == RETURN_ERR) || (output_bool == FALSE))
+    {
+       *output = 0;
+        return RETURN_OK;
+    }
+    GetInterfaceName_HostapdConf(radioIndex,interface_name);
+    snprintf(cmd,sizeof(cmd),"dmesg | grep \"link becomes ready\" | grep %s | tail -1 | cut -d ']' -f1 | cut -d '.' -f1 | cut -d '[' -f 2 | sed \"s/^ *//g\"",interface_name);
+    status = _syscmd(cmd, buf, sizeof(buf));
+    if ((status != 0) && (strlen(buf) == 0))
+        return RETURN_ERR;
+    radio_uptime=atol(buf);
+    if (getCurrenttime(&current_time) == -1)
+        return RETURN_ERR;
+    *output = current_time - radio_uptime;
+    return RETURN_OK;
 }
 
 INT wifi_getApEnableOnLine(INT wlanIndex, BOOL *enabled)
