@@ -567,6 +567,11 @@ INT platform_hal_SetLowPowerModeState(PPSM_STATE pState)
 #endif
 }
 
+INT platform_hal_SetPppUserName(CHAR* pUserName, ULONG maxSize) { return RETURN_OK; }
+INT platform_hal_SetPppPassword(CHAR* pPassword, ULONG maxSize) { return RETURN_OK; }
+INT platform_hal_GetPppUserName(CHAR* pUserName, ULONG maxSize) { return RETURN_OK; }
+INT platform_hal_GetPppPassword(CHAR* pPassword, ULONG maxSize) { return RETURN_OK; }
+
 #ifdef _PLATFORM_HAL_TEST_
 int main(int argc,char **argv)
 {
