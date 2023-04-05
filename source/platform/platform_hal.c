@@ -223,12 +223,7 @@ INT platform_hal_GetHardwareVersion(CHAR* pValue)
         return RETURN_ERR;
     }
 
-    if(NULL == pValue)
-    {
-        return RETURN_ERR;
-    }
-    
-	ret = execute("grep 'Revision' /proc/cpuinfo", hwVer);
+    ret = execute("grep 'Revision' /proc/cpuinfo", hwVer);
     if(RETURN_OK != ret)
     {
         printf("\nError %s\n", __func__);
@@ -288,6 +283,10 @@ INT platform_hal_GetFirmwareName(CHAR* pValue, ULONG maxSize)
 
 INT platform_hal_GetBaseMacAddress(CHAR *pValue) 
 { 
+        if( NULL == pValue )
+        {
+              return RETURN_ERR;
+        }
 	execute_cmd("ifconfig erouter0 | grep HWaddr | cut -d ' ' -f7",pValue);	
 	return RETURN_OK;
 }
