@@ -113,14 +113,11 @@ CCSP_HAL_ETHSW_ADMIN_STATUS admin_status;
 
 int is_interface_exists(const char *fname)
 {
-    FILE *file;
-    if ((file = fopen(fname, "r")))
-    {
-        fclose(file);
+    if (!access(fname, 0|F_OK ))
         return 1;
-    }
-        return 0;
+    return 0;
 }
+
 #if defined(FEATURE_RDKB_WAN_MANAGER)
 void *ethsw_thread_main(void *context __attribute__((unused)))
 {
@@ -179,15 +176,12 @@ void *ethsw_thread_main(void *context __attribute__((unused)))
     return NULL;
 }
 
-void GWP_RegisterEthWan_Callback(appCallBack *obj) {
-    int rc;
-
-    if (obj == NULL) {
-        rc = RETURN_ERR;
-    } else {
+void GWP_RegisterEthWan_Callback(appCallBack *obj)
+{
+    if (obj != NULL)
+    {
         ethWanCallbacks.pGWP_act_EthWanLinkUP = obj->pGWP_act_EthWanLinkUP;
         ethWanCallbacks.pGWP_act_EthWanLinkDown = obj->pGWP_act_EthWanLinkDown;
-        rc = RETURN_OK;
     }
 
     return;
@@ -285,17 +279,14 @@ CcspHalEthSwGetPortStatus
         PCCSP_HAL_ETHSW_LINK_STATUS pStatus
     )
 {
-  char *path;
+    int eth_if;
 
-  path="/sys/class/net/eth1";
+    eth_if=is_interface_exists("/sys/class/net/eth1");
 
-  int eth_if = is_interface_exists(path);
-
-  if(!admin_status && eth_if)
-       *pStatus  = CCSP_HAL_ETHSW_LINK_Up;
-  else
-       *pStatus   = CCSP_HAL_ETHSW_LINK_Down;
-
+    if(!admin_status && eth_if)
+        *pStatus  = CCSP_HAL_ETHSW_LINK_Up;
+    else
+        *pStatus   = CCSP_HAL_ETHSW_LINK_Down;
 
     switch (PortId)
     {
@@ -506,7 +497,8 @@ CcspHalEthSwGetPortAdminStatus
 
     CcspHalEthSwTrace(("port id %d", PortId));
 
-    fp = popen("readlink -f /sys/class/net/eth1", "r");
+    if(!(fp = popen("readlink -f /sys/class/net/eth1", "r")))
+        return RETURN_ERR;
     fgets(port_id, sizeof(port_id), fp);
     if((p=strstr(port_id, val1))){
         strtok_r(p, ".", &next);
@@ -574,54 +566,36 @@ CcspHalEthSwSetPortAdminStatus
         CCSP_HAL_ETHSW_ADMIN_STATUS AdminStatus
     )
 {
+    FILE *fp;
+    char cmd[128], port_id[256], *val1="/1-1.1.", *val= "/1-1.", *p, *next;
+    char *interface = "eth1";
+    int port_num=0;
+
     CcspHalEthSwTrace(("set port %d AdminStatus to %d", PortId, AdminStatus));
 
-    char cmd1[50];
-    char cmd2[50];
-    int port_num=0;
-    FILE *fp = NULL;
-
-    char port_id[150];
-    char *val = "/1-1.";
-    char *val1 = "/1-1.1.";
-    char *p = NULL;
-
-    char *interface = NULL;
-    char *path = NULL;
-    interface = (char *)malloc(5);
-    path = (char *)malloc(20);
-    strcpy(path,"/sys/class/net/eth1");
-
-    int eth_if=is_interface_exists(path);
-
-    if(eth_if == 0 )
+    if(!is_interface_exists("/sys/class/net/eth1"))
         return  RETURN_ERR;
 
-    fp= popen("ls -la /sys/class/net/ | awk '/eth1/{portId=$11}   END {print portId}'","r");
+    if(!(fp= popen("readlink -f /sys/class/net/eth1","r")))
+        return  RETURN_ERR;
     fgets(port_id,sizeof(port_id),fp);
-    if (strstr(port_id,val1)){
-        p = strstr(port_id,val1);
-        p = strtok(p,".");
-        p = strtok(NULL,".");
-        p = strtok(NULL,"/");
-        port_num = atoi(p);
-        if (port_num == 2)
-                port_num = port_num + 2;
-        else
-                port_num = port_num;
-    }
-    else{
-        p = strstr(port_id,val);
-        p = strtok(p,".");
-        p = strtok(NULL,"/");
-        port_num = atoi(p);
-        port_num = port_num - 1;
-    }
 
-    strcpy(interface,"eth1");
-
-    sprintf(cmd1,"ip link set %s up",interface);
-    sprintf(cmd2,"ip link set %s down",interface);
+    if((p=strstr(port_id, val1))){
+        strtok_r(p, ".", &next);
+        strtok_r(next, ".", &next);
+        p = strtok_r(next, "/", &next);
+        port_num = atoi(p);
+        if(port_num == 2)
+            port_num += 2;
+    }
+    else if((p = strstr(port_id, val))){
+        strtok_r(p, ".", &next);
+        p = strtok_r(next, "/", &next);
+        port_num = atoi(p);
+        port_num--;
+    }
+    else
+        printf("string not matching\n");
 
     switch (PortId)
     {
@@ -634,12 +608,14 @@ CcspHalEthSwSetPortAdminStatus
             {
                  if(AdminStatus==0)
                  {
-                    system(cmd1);
+                    snprintf(cmd, sizeof(cmd), "ip link set %s up", interface);
+                    system(cmd);
                     admin_status=0;
                  }
                  else
                  {
-                     system(cmd2);
+                     snprintf(cmd, sizeof(cmd), "ip link set %s down", interface);
+                     system(cmd);
                      admin_status=1;
                  }
              }
@@ -728,40 +704,40 @@ CcspHalEthSwLocatePortByMacAddress
 //For Getting Current Interface Name from corresponding hostapd configuration
 void GetInterfaceName(char *interface_name, char *conf_file)
 {
-        FILE *fp = NULL;
-        char path[MAX_BUF_SIZE] = {0},output_string[MAX_BUF_SIZE] = {0},fname[MAX_BUF_SIZE] = {0};
-        int count = 0;
-        char *interface = NULL;
+    FILE *fp = NULL;
+    char path[MAX_BUF_SIZE] = {0},output_string[MAX_BUF_SIZE] = {0},fname[MAX_BUF_SIZE] = {0};
+    int count = 0;
+    char *interface = NULL;
 
-        fp = fopen(conf_file, "r");
-        if(fp == NULL)
-        {
-                printf("conf_file %s not exists \n", conf_file);
-                return;
-        }
-        fclose(fp);
+    fp = fopen(conf_file, "r");
+    if(fp == NULL)
+    {
+        printf("conf_file %s not exists \n", conf_file);
+        return;
+    }
+    fclose(fp);
 
-        sprintf(fname,"%s%s%s","cat ",conf_file," | grep interface=");
-        fp = popen(fname,"r");
-        if(fp == NULL)
-        {
-                        printf("Failed to run command in Function %s\n",__FUNCTION__);
-                        strcpy(interface_name, "");
-                        return;
-        }
-        if(fgets(path, sizeof(path)-1, fp) != NULL)
-        {
-                        interface = strchr(path,'=');
+    sprintf(fname,"%s%s%s","cat ",conf_file," | grep interface=");
+    fp = popen(fname,"r");
+    if(fp == NULL)
+    {
+        printf("Failed to run command in Function %s\n",__FUNCTION__);
+        strcpy(interface_name, "");
+        return;
+    }
+    if(fgets(path, sizeof(path)-1, fp) != NULL)
+    {
+        interface = strchr(path,'=');
 
-                        if(interface != NULL)
-                                strcpy(output_string, interface+1);
-        }
+        if(interface != NULL)
+            strcpy(output_string, interface+1);
+    }
 
-        for(count = 0;output_string[count]!='\n';count++)
-                        interface_name[count] = output_string[count];
-        interface_name[count]='\0';
+    for(count = 0;output_string[count]!='\n';count++)
+            interface_name[count] = output_string[count];
+    interface_name[count]='\0';
 
-        pclose(fp);
+    pclose(fp);
 }
 /* CcspHalExtSw_getAssociatedDevice :  */
 /**
@@ -779,159 +755,160 @@ void GetInterfaceName(char *interface_name, char *conf_file)
 
 INT CcspHalExtSw_getAssociatedDevice(ULONG *output_array_size, eth_device_t **output_struct)
 {
-	CHAR buf[MAX_BUF_SIZE] = {0},str[MAX_BUF_SIZE] = {0},interface_name[50] = {0},macAddr[50] = {0};
-	FILE *fp = NULL,*fp1 = NULL;
-	INT count = 0,str_count = 0;
-	ULONG maccount = 0,eth_count = 0;
-	INT arr[MACADDRESS_SIZE] = {0};
-	UCHAR mac[MACADDRESS_SIZE] = {0};
-	CHAR ipAddr[50],stub[50],phyAddr[50],ifName[32],status[32];
-	int ret;
-	if(output_struct == NULL)
-	{
-		printf("\nNot enough memory\n");
-		return RETURN_ERR;
-	}
-	if( access( "/tmp/ethernetmac.txt", F_OK ) != -1 ) {
-		remove("/tmp/ethernetmac.txt");
-	}
-	system("cat /nvram/dnsmasq.leases | cut -d ' ' -f2 > /tmp/connected_mac.txt"); //storing the all associated device information in tmp folder
-	//storing the private wifi  associated device iformation in tmp folder
-	GetInterfaceName(interface_name,"/nvram/hostapd0.conf");
-	sprintf(buf,"iw dev %s station dump | grep Station | cut -d ' ' -f2 > /tmp/Associated_Devices.txt",interface_name);
-	system(buf);
-	GetInterfaceName(interface_name,"/nvram/hostapd1.conf");
-	sprintf(buf,"iw dev %s station dump | grep Station | cut -d ' ' -f2 >> /tmp/Associated_Devices.txt",interface_name);
-	system(buf);
+    CHAR buf[MAX_BUF_SIZE] = {0},str[MAX_BUF_SIZE] = {0},interface_name[50] = {0},macAddr[50] = {0};
+    FILE *fp = NULL,*fp1 = NULL;
+    INT count = 0,str_count = 0;
+    ULONG maccount = 0,eth_count = 0;
+    INT arr[MACADDRESS_SIZE] = {0};
+    UCHAR mac[MACADDRESS_SIZE] = {0};
+    CHAR ipAddr[50],stub[50],phyAddr[50],ifName[32],status[32];
+    int ret;
 
-	system("diff /tmp/Associated_Devices.txt /tmp/connected_mac.txt | grep \"^+\" | cut -c2- | sed -n '1!p' > /tmp/ethernet_connected_clients.txt"); //separating the ethernet associated device information from connected_mac test file
-	fp=popen("cat /tmp/ethernet_connected_clients.txt | wc -l","r"); // For getting the  ethernet connected mac count
-	if(fp == NULL)
-		return RETURN_ERR;
-	else
-	{
-		fgets(buf,MAX_BUF_SIZE,fp);
-		maccount = atol(buf);
-		fprintf(stderr,"ethernet umac is %d \n",maccount);
-	}
-	pclose(fp);
-	eth_device_t *temp=NULL;
-	temp = (eth_device_t*)calloc(1, sizeof(eth_device_t)*maccount);
-	if(temp == NULL)
-	{
-		fprintf(stderr,"Not enough memory \n");
-		return RETURN_ERR;
-	}
-	fp=fopen("/tmp/ethernet_connected_clients.txt","r"); // reading the ethernet associated device information
-	if(fp == NULL)
-	{
-		*output_struct = NULL;
-		*output_array_size = 0;
-		return RETURN_ERR;
-	}
-	else
-	{
-		for(count = 0;count < maccount ; count++)
-		{
-			fgets(str,MAX_BUF_SIZE,fp);	
-			for(str_count = 0;str[str_count]!='\n';str_count++)
-				macAddr[str_count] = str[str_count];
-			macAddr[str_count] = '\0';
-			system("ip nei show | grep brlan0 > /tmp/arp_cache");
-			fp1=fopen("/tmp/arp_cache","r");
-			if(fp1 == NULL)
-				return RETURN_ERR;
+    if(output_struct == NULL)
+    {
+        printf("\nNot enough memory\n");
+        return RETURN_ERR;
+    }
+    if( access( "/tmp/ethernetmac.txt", F_OK ) != -1 ) {
+        remove("/tmp/ethernetmac.txt");
+    }
+    system("cat /nvram/dnsmasq.leases | cut -d ' ' -f2 > /tmp/connected_mac.txt"); //storing the all associated device information in tmp folder
+    //storing the private wifi  associated device iformation in tmp folder
+    GetInterfaceName(interface_name,"/nvram/hostapd0.conf");
+    sprintf(buf,"iw dev %s station dump | grep Station | cut -d ' ' -f2 > /tmp/Associated_Devices.txt",interface_name);
+    system(buf);
+    GetInterfaceName(interface_name,"/nvram/hostapd1.conf");
+    sprintf(buf,"iw dev %s station dump | grep Station | cut -d ' ' -f2 >> /tmp/Associated_Devices.txt",interface_name);
+    system(buf);
 
-			while(fgets(buf,sizeof(buf),fp1) != NULL)
-			{
-				if ( strstr(buf, "FAILED") != 0 )
-					continue;
-				/*
+    system("diff /tmp/Associated_Devices.txt /tmp/connected_mac.txt | grep \"^+\" | cut -c2- | sed -n '1!p' > /tmp/ethernet_connected_clients.txt"); //separating the ethernet associated device information from connected_mac test file
+    fp=popen("cat /tmp/ethernet_connected_clients.txt | wc -l","r"); // For getting the  ethernet connected mac count
+    if(fp == NULL)
+        return RETURN_ERR;
+    else
+    {
+        fgets(buf,MAX_BUF_SIZE,fp);
+        maccount = atol(buf);
+        fprintf(stderr,"ethernet umac is %d \n",maccount);
+    }
+    pclose(fp);
+    eth_device_t *temp=NULL;
+    temp = (eth_device_t*)calloc(1, sizeof(eth_device_t)*maccount);
+    if(temp == NULL)
+    {
+        fprintf(stderr,"Not enough memory \n");
+        return RETURN_ERR;
+    }
+    fp=fopen("/tmp/ethernet_connected_clients.txt","r"); // reading the ethernet associated device information
+    if(fp == NULL)
+    {
+        *output_struct = NULL;
+        *output_array_size = 0;
+        return RETURN_ERR;
+    }
+    else
+    {
+        for(count = 0;count < maccount ; count++)
+        {
+            fgets(str,MAX_BUF_SIZE,fp);
+            for(str_count = 0;str[str_count]!='\n';str_count++)
+                macAddr[str_count] = str[str_count];
+            macAddr[str_count] = '\0';
+            system("ip nei show | grep brlan0 > /tmp/arp_cache");
+            fp1=fopen("/tmp/arp_cache","r");
+            if(fp1 == NULL)
+                return RETURN_ERR;
+
+            while(fgets(buf,sizeof(buf),fp1) != NULL)
+            {
+                if ( strstr(buf, "FAILED") != 0 )
+                    continue;
+/*
 Sample:
 10.0.0.208 dev brlan0 lladdr d4:be:d9:99:7f:47 STALE
 10.0.0.107 dev brlan0 lladdr 64:a2:f9:d2:f5:67 REACHABLE
-				 */
-				ret = sscanf(buf, LM_ARP_ENTRY_FORMAT,
-						ipAddr,
-						stub,
-						ifName,
-						stub,
-						phyAddr,
-						status);  
-				if(ret != 6)
-					continue;
-				if(strcmp(phyAddr,macAddr) == 0)
-				{
-					memset(buf,0,sizeof(buf));
-					if(strcmp(status,"REACHABLE") == 0)
-					{
-						sprintf(buf,"echo %s >> /tmp/ethernetmac.txt",macAddr);
-						system(buf);
-						eth_count++;
-						break;
-					}
-					else if((strcmp(status,"STALE") == 0) || (strcmp(status,"DELAY")))
-					{
-						sprintf(buf,"ping -q -c 1 -W 1  \"%s\"  > /dev/null 2>&1",ipAddr);
-						fprintf(stderr,"buf is %s and MACADRRESS %s\n",buf,macAddr);
-						if (WEXITSTATUS(system(buf)) == 0)
-						{
-							fprintf(stderr,"Inside STALE SUCCESS \n");
-							memset(buf,0,sizeof(buf));
-							sprintf(buf,"echo %s >> /tmp/ethernetmac.txt",macAddr);
-							system(buf);
-							eth_count++;
-							break;
-						}
-					}
-					else
-					{
-						fprintf(stderr,"Running in different state \n");
-						break;
-					}
-				}
-				else
-					fprintf(stderr,"MAcAddress is not valid \n");
-			}
-			fclose(fp1);
-		}
-	}
-	fclose(fp);
-	fp=fopen("/tmp/ethernetmac.txt","r");
-	if(fp == NULL)
-	{
-		*output_struct = NULL;
-		*output_array_size = 0;
-		return RETURN_OK;
-	}
-	else
-	{
-		memset(buf,0,sizeof(buf));
-		for(count = 0;count < eth_count ; count++)
-		{
-			fgets(buf,sizeof(buf),fp);
-				if(MACADDRESS_SIZE  == sscanf(buf, "%02x:%02x:%02x:%02x:%02x:%02x",&arr[0],&arr[1],&arr[2],&arr[3],&arr[4],&arr[5]) )
-				{
-					for( int ethclientindex = 0; ethclientindex < 6; ++ethclientindex )
-					{
-						mac[ethclientindex] = (unsigned char) arr[ethclientindex];
-					}
-					memcpy(temp[count].eth_devMacAddress,mac,(sizeof(unsigned char))*6);
-					fprintf(stderr,"MAC %d = %X:%X:%X:%X:%X:%X \n", count, temp[count].eth_devMacAddress[0],temp[count].eth_devMacAddress[1], temp[count].eth_devMacAddress[2], temp[count].eth_devMacAddress[3], temp[count].eth_devMacAddress[4], temp[count].eth_devMacAddress[5]);
-				}
-			temp[count].eth_port=1;
-			temp[count].eth_vlanid=10;
-			temp[count].eth_devTxRate=100;
-			temp[count].eth_devRxRate=100;
-			temp[count].eth_Active=1;
+*/
+                ret = sscanf(buf, LM_ARP_ENTRY_FORMAT,
+                                  ipAddr,
+                                  stub,
+                                  ifName,
+                                  stub,
+                                  phyAddr,
+                                  status);
+                if(ret != 6)
+                    continue;
+                if(strcmp(phyAddr,macAddr) == 0)
+                {
+                    memset(buf,0,sizeof(buf));
+                    if(strcmp(status,"REACHABLE") == 0)
+                    {
+                        sprintf(buf,"echo %s >> /tmp/ethernetmac.txt",macAddr);
+                        system(buf);
+                        eth_count++;
+                        break;
+                    }
+                    else if((strcmp(status,"STALE") == 0) || (strcmp(status,"DELAY")))
+                    {
+                        sprintf(buf,"ping -q -c 1 -W 1  \"%s\"  > /dev/null 2>&1",ipAddr);
+                        fprintf(stderr,"buf is %s and MACADRRESS %s\n",buf,macAddr);
+                        if (WEXITSTATUS(system(buf)) == 0)
+                        {
+                            fprintf(stderr,"Inside STALE SUCCESS \n");
+                            memset(buf,0,sizeof(buf));
+                            sprintf(buf,"echo %s >> /tmp/ethernetmac.txt",macAddr);
+                            system(buf);
+                            eth_count++;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        fprintf(stderr,"Running in different state \n");
+                        break;
+                    }
+                }
+                else
+                    fprintf(stderr,"MacAddress is not valid \n");
+            }
+            fclose(fp1);
+        }
+    }
+    fclose(fp);
+    fp=fopen("/tmp/ethernetmac.txt","r");
+    if(fp == NULL)
+    {
+        *output_struct = NULL;
+        *output_array_size = 0;
+        return RETURN_OK;
+    }
+    else
+    {
+        memset(buf,0,sizeof(buf));
+        for(count = 0;count < eth_count ; count++)
+        {
+            fgets(buf,sizeof(buf),fp);
+            if(MACADDRESS_SIZE  == sscanf(buf, "%02x:%02x:%02x:%02x:%02x:%02x",&arr[0],&arr[1],&arr[2],&arr[3],&arr[4],&arr[5]) )
+            {
+                for( int ethclientindex = 0; ethclientindex < 6; ++ethclientindex )
+                {
+                    mac[ethclientindex] = (unsigned char) arr[ethclientindex];
+                }
+                memcpy(temp[count].eth_devMacAddress,mac,(sizeof(unsigned char))*6);
+                fprintf(stderr,"MAC %d = %X:%X:%X:%X:%X:%X \n", count, temp[count].eth_devMacAddress[0],temp[count].eth_devMacAddress[1], temp[count].eth_devMacAddress[2], temp[count].eth_devMacAddress[3], temp[count].eth_devMacAddress[4], temp[count].eth_devMacAddress[5]);
+            }
+            temp[count].eth_port=1;
+            temp[count].eth_vlanid=10;
+            temp[count].eth_devTxRate=100;
+            temp[count].eth_devRxRate=100;
+            temp[count].eth_Active=1;
+        }
+    }
+    fclose(fp);
+    *output_struct = temp;
+    *output_array_size = eth_count;
+    fprintf(stderr,"Connected Active ethernet clients count is %ld \n",*output_array_size);
 
-		}
-	}
-	fclose(fp);
-	*output_struct = temp;
-	*output_array_size = eth_count;
-	fprintf(stderr,"Connected Active ethernet clients count is %ld \n",*output_array_size);
-	return 	RETURN_OK;
+    return 	RETURN_OK;
 }
 
 /* CcspHalExtSw_getEthWanEnable  */
@@ -949,8 +926,8 @@ Sample:
 
 INT CcspHalExtSw_getEthWanEnable(BOOLEAN *enable)
 {
-	*enable = 1; // Raspberrypi doesn't have docsis support.so, it always return as 1.
-	return RETURN_OK;
+    *enable = 1; // Raspberrypi doesn't have docsis support.so, it always return as 1.
+    return RETURN_OK;
 }
 
 /* CcspHalExtSw_getEthWanPort:  */
@@ -968,8 +945,8 @@ INT CcspHalExtSw_getEthWanEnable(BOOLEAN *enable)
 
 INT CcspHalExtSw_getEthWanPort(UINT *Port)
 {
-	*Port = 0;
-	return RETURN_OK;
+    *Port = 0;
+    return RETURN_OK;
 }
 
 /* CcspHalExtSw_setEthWanEnable :  */
@@ -987,8 +964,8 @@ INT CcspHalExtSw_getEthWanPort(UINT *Port)
 
 INT CcspHalExtSw_setEthWanEnable(BOOLEAN enable)
 {
-	enable = 0;
-	return RETURN_OK;
+    enable = 0;
+    return RETURN_OK;
 }
 
 
@@ -1007,39 +984,39 @@ INT CcspHalExtSw_setEthWanEnable(BOOLEAN enable)
 
 INT CcspHalExtSw_setEthWanPort(UINT Port)
 {
-	Port = 0;
-	return RETURN_OK;
+    Port = 0;
+    return RETURN_OK;
 }
 
 bool rpiNet_isInterfaceLinkUp(const char *ifname)
 {
-	int  skfd;
-	struct ifreq intf;
-	bool isUp = FALSE;
+    int  skfd;
+    struct ifreq intf;
+    bool isUp = FALSE;
 
-	if(ifname == NULL) {
-		return FALSE;
-	}
+    if(ifname == NULL) {
+        return FALSE;
+    }
 
-	if ((skfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-		return FALSE;
-	}
+    if ((skfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        return FALSE;
+    }
 
-	strcpy(intf.ifr_name, ifname);
+    strcpy(intf.ifr_name, ifname);
 
-	if (ioctl(skfd, SIOCGIFFLAGS, &intf) == -1) {
-		isUp = 0;
-	} else {
-		isUp = (intf.ifr_flags & IFF_RUNNING) ? TRUE : FALSE;
-	}
+    if (ioctl(skfd, SIOCGIFFLAGS, &intf) == -1) {
+        isUp = 0;
+    } else {
+        isUp = (intf.ifr_flags & IFF_RUNNING) ? TRUE : FALSE;
+    }
 
-	close(skfd);
-	return isUp;
+    close(skfd);
+    return isUp;
 }
 
 INT GWP_GetEthWanLinkStatus()
 {
-	INT status = 0;
-	status = rpiNet_isInterfaceLinkUp(ETH_WAN_INTERFACE) ? TRUE : FALSE;
-	return status;
+    INT status = 0;
+    status = rpiNet_isInterfaceLinkUp(ETH_WAN_INTERFACE) ? TRUE : FALSE;
+    return status;
 }
