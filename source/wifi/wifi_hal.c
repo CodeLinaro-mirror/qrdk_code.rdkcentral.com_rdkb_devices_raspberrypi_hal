@@ -7046,7 +7046,7 @@ INT wifi_setRadioOperationalDataTransmitRates(INT wlanIndex,CHAR *output)
 
 	for(i=0;i<strlen(temp_TransmitRates);i++)
 	{
-		if (((temp_TransmitRates[i]>='0') && (temp_TransmitRates[i]<='9')) | (temp_TransmitRates[i]==' ') | (temp_TransmitRates[i]=='.'))
+		if (((temp_TransmitRates[i]>='0') && (temp_TransmitRates[i]<='9')) | (temp_TransmitRates[i]==' ') | (temp_TransmitRates[i]=='.') | (temp_TransmitRates[i]==','))
 		{
 			continue;
 		}
@@ -7099,7 +7099,8 @@ INT wifi_setRadioOperationalDataTransmitRates(INT wlanIndex,CHAR *output)
 	}
 	wifi_hostapdWrite(wlanIndex,&list);
 	list_free_param(&list);
-	Dynamically_Updated_SupportedRated_hostapd_process(wlanIndex,output);
+	//hostapd conf file is already updated with newly set supported_rates by invoking wifi_hostapdWrite(). TO-Do : ssid broadcast fix with hostapd_cli
+	//Dynamically_Updated_SupportedRated_hostapd_process(wlanIndex,output);
 	WIFI_ENTRY_EXIT_DEBUG("Exiting %s:%d\n",__func__, __LINE__);
 	return RETURN_OK;
 }
