@@ -7827,6 +7827,11 @@ INT wifi_isZeroDFSSupported(UINT radioIndex, BOOL *supported)
      return RETURN_OK;
 }
 
+INT wifi_enableCSIEngine(INT apIndex,mac_address_t sta,BOOL enable)
+{
+        return RETURN_OK;
+}
+
 #ifdef _WIFI_HAL_TEST_
 int main(int argc,char **argv)
 {
