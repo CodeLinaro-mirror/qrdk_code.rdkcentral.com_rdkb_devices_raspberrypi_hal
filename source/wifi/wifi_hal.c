@@ -5931,7 +5931,13 @@ INT wifi_getApWpsEnable(INT apIndex, BOOL *output_bool)
         {
 		sprintf(cmd,"cat /nvram/hostapd%d.conf | grep wps_state | cut -d '=' -f1",apIndex);
 	}
-	_syscmd(cmd,buf, sizeof(buf));	
+	else
+        {
+                *output_bool=FALSE;
+                 printf("This index is not supported \n");
+                 return RETURN_ERR; 
+        } 
+	_syscmd(cmd,buf, sizeof(buf));
 	if(strlen(buf)>0)
 	{
 		if(buf[0] == '#')
@@ -5966,6 +5972,11 @@ INT wifi_setApWpsEnable(INT apIndex, BOOL enableValue)
 		system(buf);
 		Dynamically_Enabling_And_Disabling_WPS_Support_Hostapd_Process(apIndex,enableValue);
 	}
+	else
+        {
+                 printf("This index is not supported \n");
+                 return RETURN_ERR;
+        }
 	return RETURN_OK;
 }        
 
