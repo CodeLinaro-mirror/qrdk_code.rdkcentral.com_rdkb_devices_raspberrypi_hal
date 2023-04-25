@@ -281,6 +281,11 @@ CcspHalEthSwGetPortStatus
 {
     int eth_if;
 
+    if(!pLinkRate || !pDuplexMode || !pStatus)
+    {
+        printf("ERROR: Invalid argument. \n");
+        return RETURN_ERR;
+    }
     eth_if=is_interface_exists("/sys/class/net/eth1");
 
     if(!admin_status && eth_if)
@@ -357,6 +362,11 @@ CcspHalEthSwGetPortCfg
         PCCSP_HAL_ETHSW_DUPLEX_MODE pDuplexMode
     )
 {
+    if(!pLinkRate || !pDuplexMode)
+    {
+        printf("ERROR: Invalid argument. \n");
+        return RETURN_ERR;
+    }
     switch (PortId)
     {
         case CCSP_HAL_ETHSW_EthPort1:
@@ -497,6 +507,11 @@ CcspHalEthSwGetPortAdminStatus
 
     CcspHalEthSwTrace(("port id %d", PortId));
 
+    if(!pAdminStatus)
+    {
+        printf("ERROR: Invalid argument. \n");
+        return RETURN_ERR;
+    }
     if(!(fp = popen("readlink -f /sys/class/net/eth1", "r")))
         return RETURN_ERR;
     fgets(port_id, sizeof(port_id), fp);
