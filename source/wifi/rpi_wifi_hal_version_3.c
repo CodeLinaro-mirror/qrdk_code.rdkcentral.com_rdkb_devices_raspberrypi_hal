@@ -33,7 +33,6 @@
 
 #if defined(WIFI_HAL_VERSION_3)
 #define number_of_radios 2
-#define ARRAY_SZ(x) (sizeof(x) / sizeof((x)[0]))
 
 typedef struct wifi_enum_to_str_map
 {
@@ -113,29 +112,6 @@ static struct wifi_enum_to_str_map wifi_bitrate_infoTable[] =
         {WIFI_BITRATE_48MBPS,   "48"},
         {WIFI_BITRATE_54MBPS,   "54"},
 	{0,  NULL}
-};
-
-struct wifiDataTxRateHalMap
-{
-        wifi_bitrate_t DataTxRateEnum;
-        char DataTxRateStr[8];
-};
-
-struct wifiDataTxRateHalMap wifiDataTxRateMap[] =
-{
-        {WIFI_BITRATE_DEFAULT, "Default"},
-        {WIFI_BITRATE_1MBPS, "1"},
-        {WIFI_BITRATE_2MBPS, "2"},
-        {WIFI_BITRATE_5_5MBPS, "5.5"},
-        {WIFI_BITRATE_6MBPS, "6"},
-        {WIFI_BITRATE_9MBPS, "9"},
-        {WIFI_BITRATE_11MBPS, "11"},
-        {WIFI_BITRATE_12MBPS, "12"},
-        {WIFI_BITRATE_18MBPS, "18"},
-        {WIFI_BITRATE_24MBPS, "24"},
-        {WIFI_BITRATE_36MBPS, "36"},
-        {WIFI_BITRATE_48MBPS, "48"},
-        {WIFI_BITRATE_54MBPS, "54"}
 };
 
 /* refer to wifi_ap_security_mode_t for the enum definitions */
@@ -950,23 +926,6 @@ INT wifi_setRadioOperatingParameters(wifi_radio_index_t index, wifi_radio_operat
 		printf("wifi_setRadioChannel failed radioIndex[%d] \n",index);
 		return RETURN_ERR;
 	}
-
-        int i, size, len;
-        char data_transmitrates[512] = {'\0'};
-        len = sizeof(data_transmitrates);
-        for (i=0; i<ARRAY_SZ(wifiDataTxRateMap); i++) {
-                if(operationParam->operationalDataTransmitRates & wifiDataTxRateMap[i].DataTxRateEnum) {
-                        if(data_transmitrates[0]== '\0')
-                                size = snprintf(data_transmitrates, len, "%s", wifiDataTxRateMap[i].DataTxRateStr);
-                        else
-                                size += snprintf(data_transmitrates + size, len - size,",%s",wifiDataTxRateMap[i].DataTxRateStr);
-                }
-        }
-
-        if (wifi_setRadioOperationalDataTransmitRates(index,data_transmitrates) != RETURN_OK) {
-                return RETURN_ERR;
-        }
-
 	wifi_applySSIDSettings(index);
 	return RETURN_OK;
 }
