@@ -479,7 +479,7 @@ INT platform_hal_getCMTSMac(CHAR *pValue)
 	 {
 	     return RETURN_ERR;
 	 }
-	strcpy(pValue,"00:00:00:00:00:00");
+	execute_cmd("ifconfig erouter0 | grep HWaddr | cut -d ' ' -f7",pValue);
 	return RETURN_OK; 
 }
 
