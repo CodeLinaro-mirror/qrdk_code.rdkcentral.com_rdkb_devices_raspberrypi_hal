@@ -587,7 +587,8 @@ CcspHalEthSwSetPortAdminStatus
     int port_num=0;
 
     CcspHalEthSwTrace(("set port %d AdminStatus to %d", PortId, AdminStatus));
-
+    if(!(AdminStatus == CCSP_HAL_ETHSW_AdminUp || AdminStatus == CCSP_HAL_ETHSW_AdminDown || AdminStatus == CCSP_HAL_ETHSW_AdminTest))
+        return RETURN_ERR;
     if(!is_interface_exists("/sys/class/net/eth1"))
         return  RETURN_ERR;
 
