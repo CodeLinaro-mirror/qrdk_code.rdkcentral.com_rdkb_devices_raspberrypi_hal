@@ -7179,11 +7179,14 @@ INT wifi_getRadioUpTime(INT radioIndex, ULONG *output)
     status = wifi_getRadioEnable(radioIndex, &output_bool);  //check radio
     if((status == RETURN_ERR) || (output_bool == FALSE))
     {
-       *output = 0;
+        *output = 0;
         return RETURN_OK;
     }
     GetInterfaceName_HostapdConf(radioIndex,interface_name);
-    snprintf(cmd,sizeof(cmd),"dmesg | grep \"link becomes ready\" | grep %s | tail -1 | cut -d ']' -f1 | cut -d '.' -f1 | cut -d '[' -f 2 | sed \"s/^ *//g\"",interface_name);
+    if (radioIndex == 0)
+        snprintf(cmd,sizeof(cmd),"dmesg | grep \"link becomes ready\" | grep %s | tail -1 | cut -d ']' -f1 | cut -d '.' -f1 | cut -d '[' -f 2 | sed \"s/^ *//g\"",interface_name);
+    else
+        snprintf(cmd,sizeof(cmd),"dmesg | grep \"entered\" | grep %s | tail -1 | cut -d ']' -f1 | cut -d '.' -f1 | cut -d '[' -f 2 | sed \"s/^ *//g\"",interface_name);
     status = _syscmd(cmd, buf, sizeof(buf));
     if ((status != 0) && (strlen(buf) == 0))
         return RETURN_ERR;
