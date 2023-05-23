@@ -554,6 +554,19 @@ INT platform_hal_GetFirmwareBankInfo(FW_BANK bankIndex, PFW_BANK_INFO pFW_Bankin
     return RETURN_OK;
 }
 
+INT platform_hal_SetLowPowerModeState(PPSM_STATE pState)
+{
+#if defined(_PSM_TRANS_RDK_TRIGG_)
+    if(NULL != pState)
+    {
+        return RETURN_OK;
+    }
+    return RETURN_ERR;
+#else
+    return RETURN_OK;
+#endif
+}
+
 #ifdef _PLATFORM_HAL_TEST_
 int main(int argc,char **argv)
 {
