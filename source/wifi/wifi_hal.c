@@ -6601,18 +6601,133 @@ INT wifi_getApAssociatedDeviceDiagnosticResult(INT apIndex, wifi_associated_dev_
 	return ret;
 
 }
+static unsigned int count_occurences(const char *buf, const char *word)
+{
+    unsigned int n = 0;
+    char *ptr = strstr(buf, word);
+
+    while (ptr++) {
+        n++;
+        ptr = strstr(ptr, word);
+    }
+
+    wifi_dbg_printf("%s: found %u of '%s'\n",  __FUNCTION__, n, word);
+    return n;
+}
+static const char *get_line_from_str_buf(const char *buf, char *line)
+{
+    int i;
+    int n = strlen(buf);
+
+    for (i = 0; i < n; i++) {
+        line[i] = buf[i];
+        if (buf[i] == '\n') {
+            line[i] = '\0';
+            return &buf[i + 1];
+        }
+    }
+
+    return NULL;
+}
 
 INT wifi_getApAssociatedDeviceDiagnosticResult3(INT apIndex, wifi_associated_dev3_t **associated_dev_array, UINT *output_array_size)
 {
 	INT ret = RETURN_OK;
 	WIFI_ENTRY_EXIT_DEBUG("Inside %s:%d\n",__func__, __LINE__);
+#if defined(_ONE_WIFI_)
+    unsigned int assoc_cnt = 0;
+    char interface_name[50] = {0};
+    char buf[MAX_BUF_SIZE * 50]= {'\0'}; // Increase this buffer if more fields are added to 'iw dev' output filter
+    char cmd[MAX_CMD_SIZE] = {'\0'};
+    char line[256] = {'\0'};
+    int i = 0;
+    const char *ptr = NULL;
+    char *key = NULL;
+    char *val = NULL;
+    wifi_associated_dev3_t *temp = NULL;
+    int rssi;
+    WIFI_ENTRY_EXIT_DEBUG("Inside %s:%d\n",__func__, __LINE__);
+     if((apIndex == 0) || (apIndex == 1))
+     sprintf(interface_name,"wlan%d",apIndex);
+     else {
+             return 0;
+     }
+
+    // Example filtered output of 'iw dev' command:
+    //    Station 0a:69:72:10:d2:fa (on wlan0)
+    //    signal :-67 [-71, -71] dBm
+    //    Station 28:c2:1f:25:5f:99 (on wlan1)
+    //    signal :-67 [-71, -70] dBm
+    if (sprintf(cmd,"iw dev %s station dump | tr -d '\\t' | grep 'Station\\|signal'", interface_name) < 0) {
+        wifi_dbg_printf("%s: failed to build iw dev command for %s\n", __FUNCTION__, interface_name);
+        return RETURN_ERR;
+    }
+
+    ret = _syscmd(cmd, buf, sizeof(buf));
+    if (ret == RETURN_ERR) {
+        wifi_dbg_printf("%s: failed to execute '%s' for %s\n", __FUNCTION__, cmd, interface_name);
+        return RETURN_ERR;
+    }
+
+    *output_array_size = count_occurences(buf, "Station");
+     if (*output_array_size == 0) return RETURN_OK;
+
+    temp = calloc(*output_array_size, sizeof(wifi_associated_dev3_t));
+    if (temp == NULL) {
+        wifi_dbg_printf("%s: failed to allocate dev array for %s\n", __FUNCTION__, interface_name);
+        return RETURN_ERR;
+    }
+    *associated_dev_array = temp;
+
+    wifi_dbg_printf("%s: array_size = %u\n", __FUNCTION__, *output_array_size);
+    ptr = get_line_from_str_buf(buf, line);
+    i = -1;
+    while (ptr) {
+        if (strstr(line, "Station")) {
+            i++;
+            key = strtok(line, " ");
+            val = strtok(NULL, " ");
+            if (sscanf(val, "%02x:%02x:%02x:%02x:%02x:%02x",
+                &temp[i].cli_MACAddress[0],
+                &temp[i].cli_MACAddress[1],
+                &temp[i].cli_MACAddress[2],
+                &temp[i].cli_MACAddress[3],
+                &temp[i].cli_MACAddress[4],
+                &temp[i].cli_MACAddress[5]) != MACADDRESS_SIZE) {
+                    wifi_dbg_printf("%s: failed to parse MAC of client connected to %s\n", __FUNCTION__, interface_name);
+                    free(*associated_dev_array);
+                    return RETURN_ERR;
+            }
+        }
+        else if (i < 0) {
+            ptr = get_line_from_str_buf(ptr, line);
+            continue; // We didn't detect 'station' entry yet
+        }
+        else if (strstr(line, "signal")) {
+            key = strtok(line, ":");
+            val = strtok(NULL, " ");
+             if (sscanf(val, "%d", &rssi) <= 0 ) {
+                wifi_dbg_printf("%s: failed to parse RSSI of client connected to %s\n", __FUNCTION__, interface_name);
+                free(*associated_dev_array);
+                return RETURN_ERR;
+            }
+            temp[i].cli_RSSI = rssi;
+            temp[i].cli_SignalStrength  = rssi;
+            temp[i].cli_SNR = 95 + rssi; // We use constant -95 noise floor
+        }
+        // Here other fields can be parsed if added to filter of 'iw dev' command
+
+        ptr = get_line_from_str_buf(ptr, line);
+    };
+#else	
 	ret = rpi_getApAssociatedDeviceDiagnosticResult3(apIndex, associated_dev_array, output_array_size);
 	if(ret == RETURN_ERR)
 		printf("func[%s], apIndex[%d] ret[%d] associated_dev_array[%p] dev_cnt[%d]\n",
 				__FUNCTION__, apIndex, ret, *associated_dev_array, *output_array_size);
-
-	WIFI_ENTRY_EXIT_DEBUG("Exiting %s:%d\n",__func__, __LINE__);
 	return ret;
+#endif
+	WIFI_ENTRY_EXIT_DEBUG("Exiting %s:%d\n",__func__, __LINE__);
+	return RETURN_OK;
 }
 
 /* getIPAddress function */
@@ -8195,6 +8310,15 @@ INT wifi_isZeroDFSSupported(UINT radioIndex, BOOL *supported)
 }
 
 INT wifi_enableCSIEngine(INT apIndex,mac_address_t sta,BOOL enable)
+{
+        return RETURN_OK;
+}
+
+INT wifi_sendActionFrame(INT apIndex,
+                                mac_address_t sta,
+                                UINT frequency,
+                                UCHAR *frame,
+                                UINT len)
 {
         return RETURN_OK;
 }
