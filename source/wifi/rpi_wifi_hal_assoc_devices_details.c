@@ -167,8 +167,11 @@ int *rpi_wifi_get_clients_count(int *pcount,char *ifname,int apIndex)
 {
         char cmd[MAX_CMD_SIZE]={0};
         char buf[MAX_BUF_SIZE] = {0};
-
+#if defined(_ONE_WIFI_)
+        snprintf(cmd,sizeof(cmd),"iw dev %s station dump | grep Station | wc -l",ifname);
+#else	
         snprintf(cmd,sizeof(cmd),"hostapd_cli -i%s all_sta | grep dot11RSNAStatsSTAAddress | wc -l",ifname);
+#endif	
         if(_syscmd(cmd,buf,sizeof(buf)) == RETURN_ERR)
         {
                 wifi_dbg_printf("%s No associated list found :%s \n",__FUNCTION__,buf);
@@ -273,8 +276,12 @@ static int get_assoc_clients_data(const int version, char *ifname, int ai, struc
         }
         else
         {
+#if defined(_ONE_WIFI_)
+                snprintf(cmd,sizeof(cmd),"iw dev %s station dump | grep Station | cut -d ' ' -f2 | sed '%dq;d'",ifname,ai+1);
+#else		
                 snprintf(cmd,sizeof(cmd),"hostapd_cli -i%s all_sta | grep dot11RSNAStatsSTAAddress | cut -d '=' -f2 | sed '%dq;d'",ifname,ai+1);
-                if(get_assoc_client_details2(buf,cmd,"MAC list") == RETURN_ERR)
+#endif
+		if(get_assoc_client_details2(buf,cmd,"MAC list") == RETURN_ERR)
                         return RETURN_ERR;
                 strncpy(mac_str, buf,sizeof(mac_str));
         }
@@ -312,14 +319,22 @@ static int get_assoc_clients_data(const int version, char *ifname, int ai, struc
 	
         /* get associated devices received packets*/
         CHECK_BUF_STATUS(buf,cmd);
+#if defined(_ONE_WIFI_)
+        snprintf(cmd,sizeof(cmd),"iw dev %s station get %s | grep 'rx packets:' | cut -d ':' -f2 | sed 's/^[ \\t]*//'",ifname,mac_str);
+#else	
         snprintf(cmd,sizeof(cmd),"hostapd_cli -i%s sta %s | grep \"rx_packets=\" | cut -d '=' -f2",ifname,mac_str);
+#endif	
         if(get_assoc_client_details2(buf,cmd,"rx_packets") == RETURN_ERR)
                 return RETURN_ERR;
         dd->rx_pkts = atoi(buf);
 
         /* get associated devices sent packets*/
         CHECK_BUF_STATUS(buf,cmd);
+#if defined(_ONE_WIFI_)
+        snprintf(cmd,sizeof(cmd),"iw dev %s station get %s | grep 'tx packets:' | cut -d ':' -f2 | sed 's/^[ \\t]*//'",ifname,mac_str);
+#else	
         snprintf(cmd,sizeof(cmd),"hostapd_cli -i%s sta %s | grep \"tx_packets=\" | cut -d '=' -f2",ifname,mac_str);
+#endif	
         if(get_assoc_client_details2(buf,cmd,"tx_pkts") == RETURN_ERR)
                 return RETURN_ERR;
         dd->tx_pkts = atoi(buf);
@@ -327,12 +342,16 @@ static int get_assoc_clients_data(const int version, char *ifname, int ai, struc
 	/* get associated devices sent bytes*/
 	if(apIndex == 1)//temp fix
 	{
-		dd->tx_bytes = (dd->tx_pkts) * 8;
+		dd->tx_bytes = (dd->tx_pkts) * 1024;
 	}
 	else
 	{	
 		CHECK_BUF_STATUS(buf,cmd);
+#if defined(_ONE_WIFI_)	
+		snprintf(cmd,sizeof(cmd),"iw dev %s station get %s | grep 'tx bytes:' | cut -d ':' -f2 | sed 's/^[ \\t]*//'",ifname,mac_str);
+#else		
 		snprintf(cmd,sizeof(cmd),"hostapd_cli -i%s sta %s | grep \"tx_bytes=\" | cut -d '=' -f2",ifname,mac_str);
+#endif		
 		if(get_assoc_client_details2(buf,cmd,"tx_bytes") == RETURN_ERR)
 			return RETURN_ERR;
 		dd->tx_bytes = atoi(buf);
@@ -341,12 +360,16 @@ static int get_assoc_clients_data(const int version, char *ifname, int ai, struc
 	/* get associated devices received bytes*/
 	if(apIndex == 1)//temp fix
 	{
-		dd->rx_bytes = (dd->rx_pkts) * 8;
+		dd->rx_bytes = (dd->rx_pkts) * 1024;
 	}
 	else
 	{	
 		CHECK_BUF_STATUS(buf,cmd);
+#if defined(_ONE_WIFI_)
+		snprintf(cmd,sizeof(cmd),"iw dev %s station get %s | grep 'rx bytes:' | cut -d ':' -f2 | sed 's/^[ \\t]*//'",ifname,mac_str);
+#else		
 		snprintf(cmd,sizeof(cmd),"hostapd_cli -i%s sta %s | grep \"rx_bytes=\" | cut -d '=' -f2",ifname,mac_str);
+#endif		
 		if(get_assoc_client_details2(buf,cmd,"rx_bytes") == RETURN_ERR)
 			return RETURN_ERR;
 		dd->rx_bytes = atoi(buf);
@@ -354,24 +377,47 @@ static int get_assoc_clients_data(const int version, char *ifname, int ai, struc
 
 	 /* get associated devices received rate*/
         CHECK_BUF_STATUS(buf,cmd);
+#if defined(_ONE_WIFI_)
+	snprintf(cmd,sizeof(cmd),"iw dev %s station get %s | grep 'rx bitrate:' | cut -d ':' -f2 | sed 's/^[ \\t]*//'",ifname,mac_str);
+#else		
         snprintf(cmd,sizeof(cmd),"hostapd_cli -i%s sta %s | grep \"rx_rate_info=\" | cut -d '=' -f2",ifname,mac_str);
+#endif	
+#if defined(_ONE_WIFI_)
+	if(apIndex == 1)
+           dd->rx_rate = 0;
+#else	
         if(get_assoc_client_details2(buf,cmd,"rx_rate") == RETURN_ERR)
                 return RETURN_ERR;
         dd->rx_rate = atoi(buf);
-
+#endif
 	 /* get associated devices sent rate*/
         CHECK_BUF_STATUS(buf,cmd);
+#if defined(_ONE_WIFI_)
+	snprintf(cmd,sizeof(cmd),"iw dev %s station get %s | grep 'tx bitrate:' | cut -d ':' -f2 | sed 's/^[ \\t]*//'",ifname,mac_str);
+#else		
         snprintf(cmd,sizeof(cmd),"hostapd_cli -i%s sta %s | grep \"tx_rate_info=\" | cut -d '=' -f2",ifname,mac_str);
+#endif	
+#if defined(_ONE_WIFI_)
+	if(apIndex == 1)
+	{	
+             dd->tx_rate = 0;
+	     dd->DataFramesSentAck = 0;
+	}     
+#else	
         if(get_assoc_client_details2(buf,cmd,"tx_rate") == RETURN_ERR)
                 return RETURN_ERR;
         dd->tx_rate = atoi(buf);
 	dd->DataFramesSentAck = atoi(buf);
-
+#endif
 	 /*get per clients stats*/
         CHECK_BUF_STATUS(buf,cmd);
+#if defined(_ONE_WIFI_)
+	strcpy(buf,"1");
+#else	
         snprintf(cmd,sizeof(cmd),"hostapd_cli -i%s sta %s | grep -w \"\\[AUTH\\]\\[ASSOC\\]\" | wc -l",ifname,mac_str);
 	if(get_assoc_client_details2(buf,cmd,"stats") == RETURN_ERR)
                 return RETURN_ERR;
+#endif	
         if(atoi(buf) == 1)
         {
                 dd->assoc = 1;
@@ -383,7 +429,11 @@ static int get_assoc_clients_data(const int version, char *ifname, int ai, struc
 
 	 /* get associated devices error*/
         CHECK_BUF_STATUS(buf,cmd);
+#if defined(_ONE_WIFI_)
+        snprintf(cmd,sizeof(cmd),"iw dev %s station get %s | grep 'tx failed:' | cut -d ':' -f2 | sed 's/^[ \\t]*//'",ifname,mac_str);
+#else	
         snprintf(cmd,sizeof(cmd),"hostapd_cli -i%s sta %s | grep \"dot11RSNAStatsTKIPLocalMICFailures=\" | cut -d '=' -f2",ifname,mac_str);
+#endif	
         if(get_assoc_client_details2(buf,cmd,"Errors") == RETURN_ERR)
                 return RETURN_ERR;
         dd->tx_err = atoi(buf);
@@ -483,11 +533,19 @@ static int associated_clients_diagnostic_helper(const int version, int apIndex, 
 
         char ifname[RPI_LEN_32]= {0};
         //private wifi - 2g and 5g
+#if defined(_ONE_WIFI_)
+	if((apIndex == 0 ) || (apIndex == 1))
+#else
         if((apIndex == 0 ) || (apIndex == 1) || (apIndex == 4 ) || (apIndex == 5 ))
+#endif		
         {
                 wifi_dbg_printf("supported apIndex number...%d \n",apIndex);
+#if defined(_ONE_WIFI_)
+                snprintf(ifname,sizeof(ifname),"wlan%d",apIndex);
+#else		
 		snprintf(hconf,sizeof(hconf),"/nvram/hostapd%d.conf",apIndex);
                 GetInterfaceName(ifname,hconf);
+#endif		
                 rpi_wifi_get_clients_count (&client_count,ifname,apIndex);
 
                 /* No clients, no work. It is ok to return NULL wad_array */
@@ -509,11 +567,13 @@ static int associated_clients_diagnostic_helper(const int version, int apIndex, 
                 for (index = 0; index < client_count; ++index)
                 {
                         /* For collection of connected devices with both bands */
+#if !defined(_ONE_WIFI_)			
                         if(apIndex == 1)
                                 snprintf(buf,sizeof(buf),"hostapd_cli -i%s all_sta | grep dot11RSNAStatsSTAAddress | sed '%dq;d' >> /tmp/AllAssociated_Devices_5G.txt",ifname,index+1);
                         else if(apIndex == 0)
                                 snprintf(buf,sizeof(buf),"hostapd_cli -i%s all_sta | grep dot11RSNAStatsSTAAddress | sed '%dq;d' >> /tmp/AllAssociated_Devices_2G.txt",ifname,index+1);
                         system(buf);
+#endif			
                         memset(&dd, 0, sizeof(dd));
                         if (get_assoc_clients_data(version,ifname, index, &dd,0,apIndex) == RETURN_ERR)
                                 break;
@@ -532,10 +592,12 @@ static int associated_clients_diagnostic_helper(const int version, int apIndex, 
                         }
 
                 }
+#if !defined(_ONE_WIFI_)			
                 if (access("/tmp/AllAssociated_Devices_2G.txt", F_OK) == 0)
                         system("sort -u -o /tmp/AllAssociated_Devices_2G.txt /tmp/AllAssociated_Devices_2G.txt"); //for removing the duplicate lines
                 if (access("/tmp/AllAssociated_Devices_5G.txt", F_OK) == 0)
                         system("sort -u -o /tmp/AllAssociated_Devices_5G.txt /tmp/AllAssociated_Devices_5G.txt");
+#endif		
                 /* If we got here it means get_assoc_client_data() failed or we are done with
 		 * all the clients. If index is still 0 that means we failed to process any
                  * clients. */
@@ -649,7 +711,7 @@ INT rpi_WiFiAPAssociatedDevicesGet(INT apIndex,char *mac,int maclen)
 		strcpy(ifname,"wlan0");
 	else if(apIndex == 1)
 		strcpy(ifname,"wlan1");
-#else
+#else	
         /* getting the wireless interface name*/
         sprintf(config_file,"/nvram/hostapd%d.conf",apIndex);
         GetInterfaceName(ifname,config_file);
