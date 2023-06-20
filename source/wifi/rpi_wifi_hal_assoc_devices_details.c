@@ -644,10 +644,16 @@ INT rpi_WiFiAPAssociatedDevicesGet(INT apIndex,char *mac,int maclen)
 {
         char buf[512] = {0},ifname[32] = {0},cmd[512] = {0},config_file[32]={0},data_buf[64]={0};
         int client_count = 0,ass_cnt = 0;
-
+#if defined(_ONE_WIFI_)
+	if(apIndex == 0)
+		strcpy(ifname,"wlan0");
+	else if(apIndex == 1)
+		strcpy(ifname,"wlan1");
+#else
         /* getting the wireless interface name*/
         sprintf(config_file,"/nvram/hostapd%d.conf",apIndex);
         GetInterfaceName(ifname,config_file);
+#endif	
         /* getting the associated clients count*/
         snprintf(cmd,sizeof(cmd),"iw dev %s station dump | grep Station | cut -d ' ' -f2 | wc -l",ifname);
         if(_syscmd(cmd,buf,sizeof(buf)) == RETURN_ERR)

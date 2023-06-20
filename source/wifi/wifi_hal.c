@@ -3553,50 +3553,36 @@ INT wifi_halGetIfStats(char *ifname, wifi_radioTrafficStats2_t *pStats)
 	CHAR Value[MAX_BUF_SIZE] = {0};
 	FILE *fp = NULL;
 
-	if (ifname == NULL || strlen(ifname) <= 1)
-		return RETURN_OK;
-
-	snprintf(buf, sizeof(buf), "ifconfig -a %s > /tmp/Radio_Stats.txt", ifname);
-	system(buf);
-
-	fp = fopen("/tmp/Radio_Stats.txt", "r");
-	if(fp == NULL)
-	{
-		printf("/tmp/Radio_Stats.txt not exists \n");
-		return RETURN_ERR;
-	}
-	fclose(fp);
-	
-	sprintf(buf, "cat /tmp/Radio_Stats.txt | grep 'RX packets' | tr -s ' ' | cut -d ':' -f2 | cut -d ' ' -f1");
-	File_Reading(buf, Value);
+	sprintf(buf, "ifconfig %s | grep 'RX packets' | tr -s ' ' | cut -d ':' -f2 | cut -d ' ' -f1",ifname);
+	_syscmd(buf,Value,sizeof(Value));
 	pStats->radio_PacketsReceived = strtoul(Value, NULL, 10);
 
-	sprintf(buf, "cat /tmp/Radio_Stats.txt | grep 'TX packets' | tr -s ' ' | cut -d ':' -f2 | cut -d ' ' -f1");
-	File_Reading(buf, Value);
+	sprintf(buf, "ifconfig %s | grep 'TX packets' | tr -s ' ' | cut -d ':' -f2 | cut -d ' ' -f1",ifname);
+	_syscmd(buf,Value,sizeof(Value));
 	pStats->radio_PacketsSent = strtoul(Value, NULL, 10);
 
-	sprintf(buf, "cat /tmp/Radio_Stats.txt | grep 'RX bytes' | tr -s ' ' | cut -d ':' -f2 | cut -d ' ' -f1");
-	File_Reading(buf, Value);
+	sprintf(buf, "ifconfig %s | grep 'RX bytes' | tr -s ' ' | cut -d ':' -f2 | cut -d ' ' -f1",ifname);
+	_syscmd(buf,Value,sizeof(Value));
 	pStats->radio_BytesReceived = strtoul(Value, NULL, 10);
 
-	sprintf(buf, "cat /tmp/Radio_Stats.txt | grep 'TX bytes' | tr -s ' ' | cut -d ':' -f3 | cut -d ' ' -f1");
-	File_Reading(buf, Value);
+	sprintf(buf, "ifconfig %s | grep 'TX bytes' | tr -s ' ' | cut -d ':' -f3 | cut -d ' ' -f1",ifname);
+	_syscmd(buf,Value,sizeof(Value));
 	pStats->radio_BytesSent = strtoul(Value, NULL, 10);
 
-	sprintf(buf, "cat /tmp/Radio_Stats.txt | grep 'RX packets' | tr -s ' ' | cut -d ':' -f3 | cut -d ' ' -f1");
-	File_Reading(buf, Value);
+	sprintf(buf, "ifconfig %s | grep 'RX packets' | tr -s ' ' | cut -d ':' -f3 | cut -d ' ' -f1",ifname);
+	_syscmd(buf,Value,sizeof(Value));
 	pStats->radio_ErrorsReceived = strtoul(Value, NULL, 10);
 
-	sprintf(buf, "cat /tmp/Radio_Stats.txt | grep 'TX packets' | tr -s ' ' | cut -d ':' -f3 | cut -d ' ' -f1");
-	File_Reading(buf, Value);
+	sprintf(buf, "ifconfig %s | grep 'TX packets' | tr -s ' ' | cut -d ':' -f3 | cut -d ' ' -f1",ifname);
+	_syscmd(buf,Value,sizeof(Value));
 	pStats->radio_ErrorsSent = strtoul(Value, NULL, 10);
 
-	sprintf(buf, "cat /tmp/Radio_Stats.txt | grep 'RX packets' | tr -s ' ' | cut -d ':' -f4 | cut -d ' ' -f1");
-	File_Reading(buf, Value);
+	sprintf(buf, "ifconfig %s | grep 'RX packets' | tr -s ' ' | cut -d ':' -f4 | cut -d ' ' -f1",ifname);
+	_syscmd(buf,Value,sizeof(Value));
 	pStats->radio_DiscardPacketsReceived = strtoul(Value, NULL, 10);
 
-	sprintf(buf, "cat /tmp/Radio_Stats.txt | grep 'TX packets' | tr -s ' ' | cut -d ':' -f4 | cut -d ' ' -f1");
-	File_Reading(buf, Value);
+	sprintf(buf, "ifconfig %s | grep 'TX packets' | tr -s ' ' | cut -d ':' -f4 | cut -d ' ' -f1",ifname);
+	_syscmd(buf,Value,sizeof(Value));
 	pStats->radio_DiscardPacketsSent = strtoul(Value, NULL, 10);
 
 	WIFI_ENTRY_EXIT_DEBUG("Exiting %s:%d\n", __func__, __LINE__);
@@ -3666,7 +3652,9 @@ INT wifi_getRadioTrafficStats2(INT radioIndex, wifi_radioTrafficStats2_t *output
 
 	if (radioIndex == 0) //2.4GHz ?
 	{
-
+#if defined(_ONE_WIFI_)
+		strcpy(private_interface_name, "wlan0");
+#else
 		GetInterfaceName(private_interface_name, "/nvram/hostapd0.conf");
 
 		GetIfacestatus(private_interface_name, private_interface_status);
@@ -3682,38 +3670,56 @@ INT wifi_getRadioTrafficStats2(INT radioIndex, wifi_radioTrafficStats2_t *output
 		{
 			GetInterfaceName_virtualInterfaceName_2G(public_interface_name);
 		}
-
 		GetIfacestatus(public_interface_name, public_interface_status);
+#endif
+		GetIfacestatus(private_interface_name, private_interface_status);
 
 		if (strcmp(private_interface_status, "1") == 0)
 			wifi_halGetIfStats(private_interface_name, &private_radioTrafficStats);
 		else
 			wifi_halGetIfStatsNull(&private_radioTrafficStats);
 
+#if !defined(_ONE_WIFI_)
 		if (strcmp(public_interface_status, "1") == 0)
 			wifi_halGetIfStats(public_interface_name, &public_radioTrafficStats);
 		else
 			wifi_halGetIfStatsNull(&public_radioTrafficStats);
+#endif
 	}
 	else if (radioIndex == 1) //5GHz ?
 	{
+#if defined(_ONE_WIFI_)
+		strcpy(private_interface_name,"wlan1");
+#else
 		GetInterfaceName(private_interface_name, "/nvram/hostapd1.conf");
-		GetIfacestatus(private_interface_name, private_interface_status);
 
 		GetInterfaceName(public_interface_name, "/nvram/hostapd5.conf");
 		GetIfacestatus(public_interface_name, public_interface_status);
-
+#endif
+		GetIfacestatus(private_interface_name, private_interface_status);
 		if (strcmp(private_interface_status, "1") == 0)
 			wifi_halGetIfStats(private_interface_name, &private_radioTrafficStats);
 		else
 			wifi_halGetIfStatsNull(&private_radioTrafficStats);
 
+#if !defined(_ONE_WIFI_)
 		if (strcmp(public_interface_status, "1") == 0)
 			wifi_halGetIfStats(public_interface_name, &public_radioTrafficStats);
 		else
 			wifi_halGetIfStatsNull(&public_radioTrafficStats);
+#endif
 	}
 
+#if defined(_ONE_WIFI_)
+	output_struct->radio_BytesSent = private_radioTrafficStats.radio_BytesSent;
+	output_struct->radio_BytesReceived = private_radioTrafficStats.radio_BytesReceived;
+	output_struct->radio_PacketsSent = private_radioTrafficStats.radio_PacketsSent;
+	output_struct->radio_PacketsReceived = private_radioTrafficStats.radio_PacketsReceived;
+	output_struct->radio_ErrorsSent = private_radioTrafficStats.radio_ErrorsSent;
+	output_struct->radio_ErrorsReceived = private_radioTrafficStats.radio_ErrorsReceived;
+	output_struct->radio_DiscardPacketsSent = private_radioTrafficStats.radio_DiscardPacketsSent;
+	output_struct->radio_DiscardPacketsReceived = private_radioTrafficStats.radio_DiscardPacketsReceived;
+#else
 	output_struct->radio_BytesSent = private_radioTrafficStats.radio_BytesSent + public_radioTrafficStats.radio_BytesSent;
 	output_struct->radio_BytesReceived = private_radioTrafficStats.radio_BytesReceived + public_radioTrafficStats.radio_BytesReceived;
 	output_struct->radio_PacketsSent = private_radioTrafficStats.radio_PacketsSent + public_radioTrafficStats.radio_PacketsSent;
@@ -3722,7 +3728,7 @@ INT wifi_getRadioTrafficStats2(INT radioIndex, wifi_radioTrafficStats2_t *output
 	output_struct->radio_ErrorsReceived = private_radioTrafficStats.radio_ErrorsReceived + public_radioTrafficStats.radio_ErrorsReceived;
 	output_struct->radio_DiscardPacketsSent = private_radioTrafficStats.radio_DiscardPacketsSent + public_radioTrafficStats.radio_DiscardPacketsSent;
 	output_struct->radio_DiscardPacketsReceived = private_radioTrafficStats.radio_DiscardPacketsReceived + public_radioTrafficStats.radio_DiscardPacketsReceived;
-
+#endif
 	output_struct->radio_PLCPErrorCount = 0;				  //The number of packets that were received with a detected Physical Layer Convergence Protocol (PLCP) header error.
 	output_struct->radio_FCSErrorCount = 0;					  //The number of packets that were received with a detected FCS error. This parameter is based on dot11FCSErrorCount from [Annex C/802.11-2012].
 	output_struct->radio_InvalidMACCount = 0;				  //The number of packets that were received with a detected invalid MAC header error.
@@ -6633,7 +6639,6 @@ static const char *get_line_from_str_buf(const char *buf, char *line)
 INT wifi_getApAssociatedDeviceDiagnosticResult3(INT apIndex, wifi_associated_dev3_t **associated_dev_array, UINT *output_array_size)
 {
 	INT ret = RETURN_OK;
-	WIFI_ENTRY_EXIT_DEBUG("Inside %s:%d\n",__func__, __LINE__);
 #if defined(_ONE_WIFI_)
     unsigned int assoc_cnt = 0;
     char interface_name[50] = {0};
@@ -6683,7 +6688,7 @@ INT wifi_getApAssociatedDeviceDiagnosticResult3(INT apIndex, wifi_associated_dev
     ptr = get_line_from_str_buf(buf, line);
     i = -1;
     while (ptr) {
-        if (strstr(line, "Station")) {
+       if (strstr(line, "Station")) {
             i++;
             key = strtok(line, " ");
             val = strtok(NULL, " ");
@@ -8028,7 +8033,7 @@ INT wifi_getApAssociatedDeviceDiagnosticResult2(INT apIndex,wifi_associated_dev2
 INT wifi_getRadioChannelStats(INT radioIndex,wifi_channelStats_t *input_output_channelStats_array,INT array_size)
 {
     // TODO Implement me!
-    return RETURN_ERR;
+    return RETURN_OK;
 }
 
 INT wifi_startNeighborScan(INT apIndex, wifi_neighborScanMode_t scan_mode, INT dwell_time, UINT chan_num, UINT *chan_list)
@@ -8313,7 +8318,6 @@ INT wifi_enableCSIEngine(INT apIndex,mac_address_t sta,BOOL enable)
 {
         return RETURN_OK;
 }
-
 INT wifi_sendActionFrame(INT apIndex,
                                 mac_address_t sta,
                                 UINT frequency,
