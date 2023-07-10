@@ -257,26 +257,24 @@ INT fwupgrade_hal_set_download_interface(unsigned int interface)
 /* interface=0 for wan0, interface=1 for erouter0 */
 INT fwupgrade_hal_get_download_interface(unsigned int* pinterface)
 {
-	if (pinterface == NULL)
-	{
-		return RETURN_ERR;
-	}
-	else
-	{
-		FILE *fp = NULL;
-		char ifNum;
+    FILE *fp = NULL;
+    char ifNum;
 
-		fp = fopen(HTTP_DWNLD_IF_FILE, "r");
-		if(fp == NULL)
-		{
-			return RETURN_ERR;
-		}
-		ifNum = fgetc(fp);
-		*pinterface = atoi(&ifNum);
-		fprintf(stderr,"%s Download interface numerical value: %d\n", __func__, *pinterface);
-		fclose(fp);
-		return RETURN_OK;
-	}
+    if (pinterface == NULL)
+        return RETURN_ERR;
+
+    fp = fopen(HTTP_DWNLD_IF_FILE, "r");
+    if(fp == NULL)
+        *pinterface = 1;//returning erouter0 as default interface
+    else
+    {
+        ifNum = fgetc(fp);
+        *pinterface = atoi(ifNum);
+        fclose(fp);
+    }
+    fprintf(stderr,"%s Download interface numerical value: %d\n", __func__, *pinterface);
+
+    return RETURN_OK;
 }
 
 
