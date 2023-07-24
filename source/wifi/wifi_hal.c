@@ -3012,6 +3012,20 @@ INT wifi_getRadioOperatingChannelBandwidth(INT radioIndex, CHAR *output_string) 
         WIFI_ENTRY_EXIT_DEBUG("Inside %s:%d\n",__func__, __LINE__);
 	POINTER_CHECK(output_string != NULL);
         radioIndex_Check(radioIndex);
+#if defined(_ONE_WIFI_)
+	char buf[128] = {0};
+        snprintf(buf,sizeof(buf),"iw dev wlan%d info | grep width | cut -d ':' -f2 | cut -d ',' -f1 | xargs",radioIndex);
+	if(radioIndex == 0)
+	{
+           if(_syscmd(buf, output_string, sizeof(output_string)))
+                   strcpy(output_string,"20MHz");
+	}
+	else
+	{
+           if(_syscmd(buf, output_string, sizeof(output_string)))
+		strcpy(output_string,"80MHz"); //TO-DO
+	}
+#else
 	struct params params={"vht_oper_chwidth",""};
 	char output_buf[8]={0};
         char bw_value[10];
@@ -3040,6 +3054,7 @@ INT wifi_getRadioOperatingChannelBandwidth(INT radioIndex, CHAR *output_string) 
         {
                 strcpy(output_string,"Auto");
         }
+#endif	
         WIFI_ENTRY_EXIT_DEBUG("Exiting %s:%d\n",__func__, __LINE__);
 	return RETURN_OK;
 }
