@@ -3010,9 +3010,11 @@ INT wifi_setRadioDfsRefreshPeriod(INT radioIndex, ULONG seconds) //Tr181
 INT wifi_getRadioOperatingChannelBandwidth(INT radioIndex, CHAR *output_string) //Tr181
 {
         WIFI_ENTRY_EXIT_DEBUG("Inside %s:%d\n",__func__, __LINE__);
+	POINTER_CHECK(output_string != NULL);
+        radioIndex_Check(radioIndex);
 	struct params params={"vht_oper_chwidth",""};
 	char output_buf[8]={0};
-        char bw_value[10];	
+        char bw_value[10];
 	wifi_hostapdRead(radioIndex,&params,output_buf);
 	readBandWidth(radioIndex,bw_value);
 	if (NULL == output_string) 
@@ -3253,10 +3255,8 @@ INT wifi_getRadioTransmitPower(INT radioIndex, ULONG *output_ulong)	//RDKB
 	char buf[256]={0};
 	INT apIndex;
 	//save config and apply instantly
-	
-	if (NULL == output_ulong) 
-		return RETURN_ERR;
-	
+	radioIndex_Check(radioIndex);
+        POINTER_CHECK(output_ulong != NULL);	
 	//zqiu:TODO:save config
 	apIndex=(radioIndex==0)?0:1;
 	
@@ -3611,9 +3611,8 @@ INT wifi_getRadioTrafficStats2(INT radioIndex, wifi_radioTrafficStats2_t *output
 
 	WIFI_ENTRY_EXIT_DEBUG("Inside %s:%d\n", __func__, __LINE__);
 
-	if (NULL == output_struct)
-		return RETURN_ERR;
-
+        POINTER_CHECK(output_struct != NULL);
+        radioIndex_Check(radioIndex);
 #if 0	
 	//ifconfig radio_x	
 	output_struct->radio_BytesSent=250;	//The total number of bytes transmitted out of the interface, including framing characters.
@@ -6611,6 +6610,8 @@ INT wifi_getApAssociatedDeviceDiagnosticResult(INT apIndex, wifi_associated_dev_
 INT wifi_getApAssociatedDeviceDiagnosticResult3(INT apIndex, wifi_associated_dev3_t **associated_dev_array, UINT *output_array_size)
 {
 	INT ret = RETURN_OK;
+	POINTER_CHECK(associated_dev_array != NULL);
+	apIndex_Check(apIndex);
 	ret = rpi_getApAssociatedDeviceDiagnosticResult3(apIndex, associated_dev_array, output_array_size);
 	if(ret == RETURN_ERR)
 		printf("func[%s], apIndex[%d] ret[%d] associated_dev_array[%p] dev_cnt[%d]\n",
