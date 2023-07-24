@@ -3260,7 +3260,7 @@ INT wifi_getRadioTransmitPower(INT radioIndex, ULONG *output_ulong)	//RDKB
 	//zqiu:TODO:save config
 	apIndex=(radioIndex==0)?0:1;
 	
-	snprintf(cmd, sizeof(cmd),  "iwlist %s%d txpower | grep Tx-Power | cut -d'=' -f2", AP_PREFIX, index);
+	snprintf(cmd, sizeof(cmd),  "iw wlan%d info | grep txpower | cut -d ' ' -f2", apIndex);
 	_syscmd(cmd, buf, sizeof(buf));
 	*output_ulong = atol(buf);
 	
