@@ -572,6 +572,8 @@ INT platform_hal_SetPppPassword(CHAR* pPassword, ULONG maxSize) { return RETURN_
 INT platform_hal_GetPppUserName(CHAR* pUserName, ULONG maxSize) { return RETURN_OK; }
 INT platform_hal_GetPppPassword(CHAR* pPassword, ULONG maxSize) { return RETURN_OK; }
 
+INT platform_hal_GetInterfaceStats(const char *ifname,PINTF_STATS pIntfStats) { return RETURN_OK; }
+
 #ifdef _PLATFORM_HAL_TEST_
 int main(int argc,char **argv)
 {
