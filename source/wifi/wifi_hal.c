@@ -6625,6 +6625,7 @@ INT wifi_getApAssociatedDeviceDiagnosticResult(INT apIndex, wifi_associated_dev_
 INT wifi_getApAssociatedDeviceDiagnosticResult3(INT apIndex, wifi_associated_dev3_t **associated_dev_array, UINT *output_array_size)
 {
 	INT ret = RETURN_OK;
+	POINTER_CHECK(output_array_size != NULL);
 	POINTER_CHECK(associated_dev_array != NULL);
 	apIndex_Check(apIndex);
 	ret = rpi_getApAssociatedDeviceDiagnosticResult3(apIndex, associated_dev_array, output_array_size);
