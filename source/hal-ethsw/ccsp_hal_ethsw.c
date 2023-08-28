@@ -494,6 +494,20 @@ CcspHalEthSwSetPortCfg
 * calls. It should probably just send a message to a driver event handler task.
 *
 */
+/*readlink info has changed for Port 1 and 4 hence making the required changes to get the port info and set as well
+ *
+ * interface 1  --> mapped to usb2
+ *sys/devices/platform/scb/fd500000.pcie/pci0000:00/0000:00:00.0/0000:01:00.0/usb2/2-2/2-2:1.0/net/eth1
+
+ *interface 2  --> mapped to usb1
+ *sys/devices/platform/scb/fd500000.pcie/pci0000:00/0000:00:00.0/0000:01:00.0/usb1/1-1/1-1.3/1-1.3:1.0/net/eth1
+
+ *interface 3  --> mapped to usb1
+ *sys/devices/platform/scb/fd500000.pcie/pci0000:00/0000:00:00.0/0000:01:00.0/usb1/1-1/1-1.4/1-1.4:1.0/net/eth1
+
+ *interface 4  --> mapped to usb2
+ *sys/devices/platform/scb/fd500000.pcie/pci0000:00/0000:00:00.0/0000:01:00.0/usb2/2-1/2-1:1.0/net/eth1
+*/
 INT
 CcspHalEthSwGetPortAdminStatus
     (
@@ -502,7 +516,7 @@ CcspHalEthSwGetPortAdminStatus
     )
 {
     FILE *fp;
-    char port_id[256], *val1="/1-1.1.", *val= "/1-1.", *p, *next;
+    char port_id[256], *val1="-2:", *val= "/1-1.", *val2="-1:",*p= NULL, *next = NULL;
     int port_num=0;
 
     CcspHalEthSwTrace(("port id %d", PortId));
@@ -516,12 +530,17 @@ CcspHalEthSwGetPortAdminStatus
         return RETURN_ERR;
     fgets(port_id, sizeof(port_id), fp);
     if((p=strstr(port_id, val1))){
-        strtok_r(p, ".", &next);
-        strtok_r(next, ".", &next);
-        p = strtok_r(next, "/", &next);
+        p=strtok(p, "-:");
         port_num = atoi(p);
         if(port_num == 2)
-            port_num += 2;
+            port_num--;
+
+    }
+    else if((p=strstr(port_id, val2))){
+        p=strtok(p, "-:");
+        port_num = atoi(p);
+        if(port_num == 1)
+            port_num = 4;
     }
     else if((p = strstr(port_id, val))){
         strtok_r(p, ".", &next);
@@ -582,7 +601,7 @@ CcspHalEthSwSetPortAdminStatus
     )
 {
     FILE *fp;
-    char cmd[128], port_id[256], *val1="/1-1.1.", *val= "/1-1.", *p, *next;
+    char cmd[128], port_id[256], *val1="-2:", *val= "/1-1.", *val2="-1:",*p, *next;
     char *interface = "eth1";
     int port_num=0;
 
@@ -597,13 +616,18 @@ CcspHalEthSwSetPortAdminStatus
     fgets(port_id,sizeof(port_id),fp);
 
     if((p=strstr(port_id, val1))){
-        strtok_r(p, ".", &next);
-        strtok_r(next, ".", &next);
-        p = strtok_r(next, "/", &next);
+        p=strtok(p, "-:");
         port_num = atoi(p);
         if(port_num == 2)
-            port_num += 2;
+            port_num--;
+
     }
+    else if((p=strstr(port_id, val2))){
+        p=strtok(p, "-:");
+        port_num = atoi(p);
+        if(port_num == 1)
+            port_num = 4;
+    }  
     else if((p = strstr(port_id, val))){
         strtok_r(p, ".", &next);
         p = strtok_r(next, "/", &next);
