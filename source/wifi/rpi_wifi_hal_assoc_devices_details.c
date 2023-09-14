@@ -118,7 +118,7 @@ int rpi_getApAssociatedDeviceDiagnosticResult3(int apIndex, wifi_associated_dev3
 
 static int get_assoc_client_details2(char *data_buf,char *cmd,char *dev_data);
 static int get_assoc_clients_data(const int version, char *ifname, int ai, struct client_data *dd,char *client_mac,int apIndex);
-static int associated_clients_diagnostic_helper(const int version, int apIndex, void **out_wad_array, unsigned int *out_count);
+static int associated_clients_diagnostic_helper(const int version, int apIndex, void **out_wad_array, unsigned int *out_count,char *cli_mac,int flag);
 
 /*******************************************************************/
 /********************* Function Definitions  **********************/
@@ -296,7 +296,7 @@ static int get_assoc_clients_data(const int version, char *ifname, int ai, struc
 
         }
 
-        wifi_dbg_printf("ASSOC MAC ADDR %02X:%02X:%02X:%02X:%02X:%02X.. \n",dd->mac_addr_str[0],dd->mac_addr_str[1],dd->mac_addr_str[2],dd->mac_addr_str[3],dd->mac_addr_str[4],dd->mac_addr_str[5]);
+        wifi_dbg_printf("ASSOC  MAC ADDR %02X:%02X:%02X:%02X:%02X:%02X.. \n",dd->mac_addr_str[0],dd->mac_addr_str[1],dd->mac_addr_str[2],dd->mac_addr_str[3],dd->mac_addr_str[4],dd->mac_addr_str[5]);
 
         /*get associated devices rssi value*/
         CHECK_BUF_STATUS(buf,cmd);
@@ -305,7 +305,6 @@ static int get_assoc_clients_data(const int version, char *ifname, int ai, struc
                 return RETURN_ERR;
         dd->processed_rssi = atoi(buf);
 	dd->processed_snr = (dd->processed_rssi) + 95;
-
 	 /*get associated device ip addr value*/
         if (version < 3)
         {
@@ -521,7 +520,7 @@ static int get_assoc_clients_data(const int version, char *ifname, int ai, struc
 *
 **/
 
-static int associated_clients_diagnostic_helper(const int version, int apIndex, void **out_wad_array, unsigned int *out_count)
+static int associated_clients_diagnostic_helper(const int version, int apIndex, void **out_wad_array, unsigned int *out_count,char *cli_mac,int flag)
 {
         size_t wad_size = 0;
         void *wad_array = NULL;
@@ -530,6 +529,7 @@ static int associated_clients_diagnostic_helper(const int version, int apIndex, 
         char buf[RPI_LEN_512] = {0};
         char hconf[RPI_LEN_32] = {0};
         struct client_data dd;
+	int ret = RETURN_OK;
 
         char ifname[RPI_LEN_32]= {0};
         //private wifi - 2g and 5g
@@ -545,8 +545,11 @@ static int associated_clients_diagnostic_helper(const int version, int apIndex, 
 #else		
 		snprintf(hconf,sizeof(hconf),"/nvram/hostapd%d.conf",apIndex);
                 GetInterfaceName(ifname,hconf);
-#endif		
-                rpi_wifi_get_clients_count (&client_count,ifname,apIndex);
+#endif	
+	        if(flag == 1)
+			client_count = 1;
+		else	
+                      rpi_wifi_get_clients_count (&client_count,ifname,apIndex);
 
                 /* No clients, no work. It is ok to return NULL wad_array */
                 if (client_count == 0)
@@ -575,8 +578,15 @@ static int associated_clients_diagnostic_helper(const int version, int apIndex, 
                         system(buf);
 #endif			
                         memset(&dd, 0, sizeof(dd));
-                        if (get_assoc_clients_data(version,ifname, index, &dd,0,apIndex) == RETURN_ERR)
-                                break;
+			if(flag == 1)
+			        ret = get_assoc_clients_data(version,ifname,-1, &dd,cli_mac,apIndex);
+			else
+		        	ret = get_assoc_clients_data(version,ifname, index, &dd,0,apIndex);
+			if(ret == RETURN_ERR)
+			{
+                              break;
+			}
+			
 
                         if (version == 1)
                         {
@@ -656,7 +666,7 @@ out_error:
 int rpi_getApAssociatedDeviceDiagnosticResult(int apIndex, wifi_associated_dev_t **associated_dev_array, unsigned int *dev_cnt)
 {
         int ret = RETURN_OK;
-        ret = associated_clients_diagnostic_helper(1, apIndex, (void **)associated_dev_array, dev_cnt);
+        ret = associated_clients_diagnostic_helper(1, apIndex, (void **)associated_dev_array, dev_cnt,0,0);
         if (ret == RETURN_ERR)
                 wifi_dbg_printf("func[%s], apIndex[%d] ret[%d] associated_dev_array[%p] dev_cnt[%d]\n",
                         __FUNCTION__, apIndex, ret, *associated_dev_array, *dev_cnt);
@@ -683,7 +693,7 @@ int rpi_getApAssociatedDeviceDiagnosticResult(int apIndex, wifi_associated_dev_t
 int rpi_getApAssociatedDeviceDiagnosticResult3(int apIndex, wifi_associated_dev3_t **associated_dev_array, unsigned int *dev_cnt)
 {
         int ret = RETURN_OK;
-        ret = associated_clients_diagnostic_helper(3, apIndex, (void **)associated_dev_array, dev_cnt);
+        ret = associated_clients_diagnostic_helper(3, apIndex, (void **)associated_dev_array, dev_cnt,0,0);
         if (ret == RETURN_ERR)
                 wifi_dbg_printf("out func[%s], apIndex[%d] ret[%d] associated_dev_array[%p] dev_cnt[%d]\n",
                         __FUNCTION__, apIndex, ret, *associated_dev_array, *dev_cnt);
@@ -749,3 +759,13 @@ INT rpi_WiFiAPAssociatedDevicesGet(INT apIndex,char *mac,int maclen)
         return RETURN_OK;
 }
 
+INT rpi_getApAssociatedClientDiagnosticResult(int apIndex, char *cli_mac , wifi_associated_dev3_t **associated_dev_array)
+{
+	int ret = RETURN_OK;
+	int count = 0;
+        ret = associated_clients_diagnostic_helper(3, apIndex, (void **)associated_dev_array,&count,cli_mac,1);
+        if (ret == RETURN_ERR)
+                wifi_dbg_printf("func[%s], apIndex[%d] ret[%d] associated_dev_array[%p] \n",
+                        __FUNCTION__, apIndex, ret, *associated_dev_array);
+        return ret;
+}

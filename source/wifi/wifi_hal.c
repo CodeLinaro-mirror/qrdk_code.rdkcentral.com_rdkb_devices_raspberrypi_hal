@@ -4377,11 +4377,15 @@ INT wifi_getAssociatedDeviceDetail(INT apIndex, INT devIndex, wifi_device_t *out
 
 INT wifi_kickAssociatedDevice(INT apIndex, wifi_device_t *device)
 {
-	if (NULL == device) {
-		return RETURN_ERR;
-	} else {
-		return RETURN_OK;
-	}
+	CHAR cli_mac[32] = { '\0' };
+	CHAR cmd[MAX_CMD_SIZE] = {'\0'};
+	POINTER_CHECK(device != NULL);
+	sprintf(cli_mac, "%02x:%02x:%02x:%02x:%02x:%02x", device->wifi_devMacAddress[0], device->wifi_devMacAddress[1],
+			device->wifi_devMacAddress[2], device->wifi_devMacAddress[3], device->wifi_devMacAddress[4],
+			device->wifi_devMacAddress[5]);
+	snprintf(cmd,sizeof(cmd),"iw dev wlan%d station del %s subtype 0xA reason-code 1",apIndex,cli_mac);
+	system(cmd);
+	return RETURN_OK;
 }
 //<<
 
@@ -7688,6 +7692,15 @@ INT wifi_checkSSIDSecurityParams ()
 
 INT wifi_getApAssociatedClientDiagnosticResult(INT apIndex, char *mac_addr, wifi_associated_dev3_t *dev_conn)
 {
+	INT ret = RETURN_OK;
+	POINTER_CHECK(mac_addr != NULL);
+	POINTER_CHECK(dev_conn != NULL);
+	apIndex_Check(apIndex);
+	ret = rpi_getApAssociatedClientDiagnosticResult(apIndex, mac_addr,dev_conn);
+	if(ret == RETURN_ERR)
+		printf("func[%s], apIndex[%d] ret[%d] associated_dev_array[%p] \n",
+				__FUNCTION__, apIndex, ret, *dev_conn);
+	WIFI_ENTRY_EXIT_DEBUG("Exiting %s:%d\n",__func__, __LINE__);
 	return RETURN_OK;
 }
 INT wifi_getRadioPercentageTransmitPower(INT radioIndex, ULONG *output_ulong)
@@ -8264,6 +8277,27 @@ int main(int argc,char **argv)
         ret=wifi_getApStatus(index, status);
         printf("%s %d: %s, returns %d\n", argv[1], index, status, ret);
     }
+    else if(strstr(argv[1], "wifi_kickAssociatedDevice")!=NULL) {
+            char mac[64] = {'\0'};
+            char *token = NULL;
+            wifi_device_t dev = {0};
+            int count = 0;
+            strncpy(mac, argv[3], 64);
+            token = mac;
+            //Populate the MAC Address
+            token = strtok(token, ":");
+            while ((token != NULL) && (count<6))
+            {
+                dev.wifi_devMacAddress[count] = (int) strtol(token, NULL, 16);
+                count++;
+                token = strtok(NULL, ":");
+            }
+            printf("MAC Address : %02x:%02x:%02x:%02x:%02x:%02x\n", dev.wifi_devMacAddress[0], dev.wifi_devMacAddress[1],
+                    dev.wifi_devMacAddress[2], dev.wifi_devMacAddress[3], dev.wifi_devMacAddress[4], dev.wifi_devMacAddress[5],
+                    dev.wifi_devAssociatedDeviceAuthentiationState);
+            ret = wifi_kickAssociatedDevice(index, &dev);
+            printf("%s complete. returned %d\n", argv[1], ret);
+    }	    
     else if(strstr(argv[1], "getSSIDTrafficStats2")!=NULL) {
 		wifi_ssidTrafficStats2_t stats={0};
 		ret=wifi_getSSIDTrafficStats2(index, &stats); //Tr181
@@ -8344,6 +8378,32 @@ int main(int argc,char **argv)
 		if(associated_dev_array)
 			free(associated_dev_array); //make sure to free the list
 	}
+	else if(strstr(argv[1], "wifi_getApAssociatedClientDiagnosticResult")!=NULL) {
+                wifi_associated_dev3_t *associated_dev_array=NULL, *pt=NULL;
+                char cli_mac[32] = {0};
+		strcpy(cli_mac,argv[3]);
+		int array_size =1,i;
+                ret=wifi_getApAssociatedClientDiagnosticResult(index, &cli_mac, &associated_dev_array);
+                printf("%s %d: returns %d\n", argv[1], index,  ret);
+                for(i=0, pt=associated_dev_array; i<array_size; i++, pt++) {
+                        printf("  associated_dev %d:\n", i);
+                        printf("     cli_OperatingStandard      =%s\n", pt->cli_OperatingStandard);
+                        printf("     cli_OperatingChannelBandwidth  =%s\n", pt->cli_OperatingChannelBandwidth);
+                        printf("     cli_SNR                    =%d\n", pt->cli_SNR);
+                        printf("     cli_InterferenceSources    =%s\n", pt->cli_InterferenceSources);
+                        printf("     cli_PacketsSent            =%lu\n", pt->cli_PacketsSent);
+                        printf("     cli_PacketsReceived        =%lu\n", pt->cli_PacketsReceived);
+                        printf("     cli_BytesSent              =%lu\n", pt->cli_BytesSent);
+                        printf("     cli_BytesReceived          =%lu\n", pt->cli_BytesReceived);
+                        printf("     cli_RSSI                   =%d\n", pt->cli_RSSI);
+                        printf("     cli_MinRSSI                =%d\n", pt->cli_MinRSSI);
+                        printf("     cli_MaxRSSI                =%d\n", pt->cli_MaxRSSI);
+                        printf("     cli_ErrorsSent             =%d\n", pt->cli_ErrorsSent);
+                        printf("     cli_AuthenticationFailures =%d\n", pt->cli_AuthenticationFailures);
+                }
+                if(associated_dev_array)
+                        free(associated_dev_array); //make sure to free the list
+        }
 	WIFI_ENTRY_EXIT_DEBUG("Exiting %s:%d\n",__func__, __LINE__);
 	return 0;
 }
