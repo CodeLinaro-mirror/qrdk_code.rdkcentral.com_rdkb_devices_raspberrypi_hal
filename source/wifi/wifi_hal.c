@@ -4376,16 +4376,8 @@ INT wifi_getAssociatedDeviceDetail(INT apIndex, INT devIndex, wifi_device_t *out
 }
 
 INT wifi_kickAssociatedDevice(INT apIndex, wifi_device_t *device)
-{
-	CHAR cli_mac[32] = { '\0' };
-	CHAR cmd[MAX_CMD_SIZE] = {'\0'};
-	POINTER_CHECK(device != NULL);
-	sprintf(cli_mac, "%02x:%02x:%02x:%02x:%02x:%02x", device->wifi_devMacAddress[0], device->wifi_devMacAddress[1],
-			device->wifi_devMacAddress[2], device->wifi_devMacAddress[3], device->wifi_devMacAddress[4],
-			device->wifi_devMacAddress[5]);
-	snprintf(cmd,sizeof(cmd),"iw dev wlan%d station del %s subtype 0xA reason-code 1",apIndex,cli_mac);
-	system(cmd);
-	return RETURN_OK;
+{ 
+       return RETURN_OK; //this api is not used 
 }
 //<<
 
