@@ -3015,16 +3015,22 @@ INT wifi_getRadioOperatingChannelBandwidth(INT radioIndex, CHAR *output_string) 
 #if defined(_ONE_WIFI_)
 	char buf[128] = {0};
         snprintf(buf,sizeof(buf),"iw dev wlan%d info | grep width | cut -d ':' -f2 | cut -d ',' -f1 | xargs",radioIndex);
-	if(radioIndex == 0)
-	{
-           if(_syscmd(buf, output_string, sizeof(output_string)))
-                   strcpy(output_string,"20MHz");
-	}
-	else
-	{
-           if(_syscmd(buf, output_string, sizeof(output_string)))
-		strcpy(output_string,"80MHz"); //TO-DO
-	}
+	memset(output_string, 0, sizeof(output_string));
+	if(!_syscmd(buf, output_string, sizeof(output_string)))
+        {
+               if ( output_string[0] == '\n' || ( output_string == NULL ) || ( output_string[0] == '\0'))
+               {
+                    wifi_dbg_printf("\n[%s]Radio %s bandwidth value : .Returning error as received empty values\n",__func__,output_string);
+                    return 1;
+               }
+               else
+               {
+                    strcat(output_string,"MHz");
+                    wifi_dbg_printf("\n[%s]Radio %s bandwidth value : \n",__func__,output_string);
+                    return 0;
+               }
+
+        }
 #else
 	struct params params={"vht_oper_chwidth",""};
 	char output_buf[8]={0};
