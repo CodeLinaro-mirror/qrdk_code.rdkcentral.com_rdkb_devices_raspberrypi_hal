@@ -574,6 +574,21 @@ INT platform_hal_GetPppPassword(CHAR* pPassword, ULONG maxSize) { return RETURN_
 
 INT platform_hal_GetInterfaceStats(const char *ifname,PINTF_STATS pIntfStats) { return RETURN_OK; }
 
+int platform_hal_initLed (char * config_file_name)
+{
+    return RETURN_OK;
+}
+
+int platform_hal_setLed (PLEDMGMT_PARAMS led_data)
+{
+    return RETURN_OK;
+}
+
+int platform_hal_getLed(PLEDMGMT_PARAMS led_data)
+{
+    return RETURN_OK;
+}
+
 #ifdef _PLATFORM_HAL_TEST_
 int main(int argc,char **argv)
 {
