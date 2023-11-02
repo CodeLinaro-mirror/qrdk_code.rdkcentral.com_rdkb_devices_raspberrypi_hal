@@ -779,6 +779,7 @@ void GetInterfaceName(char *interface_name, char *conf_file)
 
     pclose(fp);
 }
+
 /* CcspHalExtSw_getAssociatedDevice :  */
 /**
 * @description Collected the active wired clients information
@@ -814,14 +815,12 @@ INT CcspHalExtSw_getAssociatedDevice(ULONG *output_array_size, eth_device_t **ou
     }
     system("cat /nvram/dnsmasq.leases | cut -d ' ' -f2 > /tmp/connected_mac.txt"); //storing the all associated device information in tmp folder
     //storing the private wifi  associated device iformation in tmp folder
-    GetInterfaceName(interface_name,"/nvram/hostapd0.conf");
-    sprintf(buf,"iw dev %s station dump | grep Station | cut -d ' ' -f2 > /tmp/Associated_Devices.txt",interface_name);
+    sprintf(buf,"iw dev wlan0 station dump | grep Station | cut -d ' ' -f2 > /tmp/Associated_Devices.txt");
     system(buf);
-    GetInterfaceName(interface_name,"/nvram/hostapd1.conf");
-    sprintf(buf,"iw dev %s station dump | grep Station | cut -d ' ' -f2 >> /tmp/Associated_Devices.txt",interface_name);
+    sprintf(buf,"iw dev wlan1 station dump | grep Station | cut -d ' ' -f2 >> /tmp/Associated_Devices.txt");
     system(buf);
 
-    system("diff /tmp/Associated_Devices.txt /tmp/connected_mac.txt | grep \"^+\" | cut -c2- | sed -n '1!p' > /tmp/ethernet_connected_clients.txt"); //separating the ethernet associated device information from connected_mac test file
+    system("diff /tmp/Associated_Devices.txt /tmp/connected_mac.txt | grep '^+' | cut -c2- | sed -n '1!p' > /tmp/ethernet_connected_clients.txt"); //separating the ethernet associated device information from connected_mac test file
     fp=popen("cat /tmp/ethernet_connected_clients.txt | wc -l","r"); // For getting the  ethernet connected mac count
     if(fp == NULL)
         return RETURN_ERR;
