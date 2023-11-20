@@ -546,7 +546,10 @@ CcspHalEthSwGetPortAdminStatus
         strtok_r(p, ".", &next);
         p = strtok_r(next, "/", &next);
         port_num = atoi(p);
-        port_num--;
+        if (port_num != 1)
+              port_num--;
+        else
+              port_num = 4;
     }
     else
         printf("string not matching\n");
@@ -632,7 +635,10 @@ CcspHalEthSwSetPortAdminStatus
         strtok_r(p, ".", &next);
         p = strtok_r(next, "/", &next);
         port_num = atoi(p);
-        port_num--;
+        if (port_num != 1)
+              port_num--;
+        else
+              port_num = 4;
     }
     else
         printf("string not matching\n");
