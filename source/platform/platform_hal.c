@@ -53,6 +53,8 @@
 #define DHCPV6_OPT_VAL_17               "0x0000118b000100020026"
 #define V6_PREFIX_CONFIG                "\n{ prefix ::/64 }"
 #define CONSOLE_LOG_FILE "/rdklogs/logs/WANMANAGERLog.txt.0"
+#define FILE_PATH_FW_NAME_VERSION "/version.txt"
+#define KEYWORD_VERSION  "VERSION"
 
 #define DHCP_DBG_PRINT(fmt ...)     {\
     FILE     *fp        = NULL;\
@@ -253,14 +255,40 @@ INT platform_hal_GetHardwareVersion(CHAR* pValue)
 
 INT platform_hal_GetSoftwareVersion(CHAR* pValue, ULONG maxSize)
 {
-    if(NULL == pValue )
+    char lineBuf[MAX_BUFFER_SIZE] = {0};
+    FILE *fp = NULL;
+    char *swVersion = NULL;
+    int ret = RETURN_ERR;
+
+    if (pValue == NULL)
+        return ret;
+
+    fp = fopen(FILE_PATH_FW_NAME_VERSION, "r");
+    if (fp == NULL)
     {
-        return RETURN_ERR;
+        return ret;
     }
 
-    strcpy(pValue, "Not Supported");
+    while (fgets(lineBuf, MAX_BUFFER_SIZE, fp) != NULL)
+    {
+        /* Look for VERSION */
+        if (strncmp(lineBuf, KEYWORD_VERSION, strlen(KEYWORD_VERSION)) == 0)
+        {
+            /* Strip off any carriage returns */
+            lineBuf[strcspn(lineBuf, "\r\n")] = 0;
 
-    return RETURN_OK;
+            swVersion = strstr(lineBuf, "=");
+            if (swVersion != NULL)
+            {
+                swVersion++;
+                strncpy(pValue, swVersion, maxSize);
+                ret = RETURN_OK;
+                break;
+            }
+        }
+    }
+    fclose(fp);
+    return ret;
 }
 
 INT platform_hal_GetBootloaderVersion(CHAR* pValue, ULONG maxSize)
