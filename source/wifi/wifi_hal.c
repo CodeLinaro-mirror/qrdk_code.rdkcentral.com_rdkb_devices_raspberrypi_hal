@@ -7948,11 +7948,14 @@ INT wifi_getRadioChannelStats(INT radioIndex,wifi_channelStats_t *input_output_c
     return RETURN_OK;
 }
 
+#if !defined(_ONE_WIFI_)
 INT wifi_startNeighborScan(INT apIndex, wifi_neighborScanMode_t scan_mode, INT dwell_time, UINT chan_num, UINT *chan_list)
 {
     // TODO Implement me!
     return RETURN_OK;
 }
+#endif
+
     INT wifi_steering_clientRemove(UINT steeringgroupIndex, INT apIndex, mac_address_t client_mac)
 {
     // TODO Implement me!
@@ -7993,11 +7996,13 @@ INT wifi_steering_clientSet(UINT steeringgroupIndex, INT apIndex, mac_address_t 
     return RETURN_ERR;
 }
 
+#if !defined(_ONE_WIFI_)
 INT wifi_getNeighboringWiFiStatus(INT radio_index, wifi_neighbor_ap2_t **neighbor_ap_array, UINT *output_array_size)
 {
     // TODO Implement me!
     return RETURN_ERR;
 }
+#endif
 
 INT wifi_setBTMRequest(UINT apIndex, CHAR *peerMac, wifi_BTMRequest_t *request)
 {
