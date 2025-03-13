@@ -792,6 +792,38 @@ int platform_hal_getLed(PLEDMGMT_PARAMS led_data)
     return RETURN_OK;
 }
 
+int platform_hal_remote_management_getport()
+{
+        int port_num = 23;
+        return port_num;
+}
+
+void platform_hal_multinet_filter_forward(FILE *filter_fp)
+{
+    fprintf(filter_fp, "-A INPUT -i ath12 -d 169.254.0.0/24 -j ACCEPT\n");
+    fprintf(filter_fp, "-A INPUT -i ath12 -m pkttype ! --pkt-type unicast -j ACCEPT\n");
+    fprintf(filter_fp, "-A FORWARD -i ath12 -o erouter0 -j DROP\n");
+    fprintf(filter_fp, "-A FORWARD -i brlan0 -o ath12 -j DROP\n");
+    fprintf(filter_fp, "-A FORWARD -i brlan1 -o ath12 -j DROP\n");
+    fprintf(filter_fp, "-A FORWARD -i ath12 -o brlan0 -j DROP\n");
+    fprintf(filter_fp, "-A FORWARD -i ath12 -o brlan1 -j DROP\n");
+    fprintf(filter_fp, "-A FORWARD -i erouter0 -o ath12 -j DROP\n");
+    fprintf(filter_fp, "-A FORWARD -i ath12 -d 192.168.100.1/32 -p tcp -m multiport --dport 22,80,443 -j DROP\n");
+
+    fprintf(filter_fp, "-A INPUT -i ath13 -d 169.254.1.0/24 -j ACCEPT\n");
+    fprintf(filter_fp, "-A INPUT -i ath13 -m pkttype ! --pkt-type unicast -j ACCEPT\n");
+    fprintf(filter_fp, "-A FORWARD -i ath13 -o erouter0 -j DROP\n");
+    fprintf(filter_fp, "-A FORWARD -i brlan0 -o ath13 -j DROP\n");
+    fprintf(filter_fp, "-A FORWARD -i brlan1 -o ath13 -j DROP\n");
+    fprintf(filter_fp, "-A FORWARD -i ath13 -o brlan0 -j DROP\n");
+    fprintf(filter_fp, "-A FORWARD -i ath13 -o brlan1 -j DROP\n");
+    fprintf(filter_fp, "-A FORWARD -i erouter0 -o ath13 -j DROP\n");
+    fprintf(filter_fp, "-A FORWARD -i ath13 -d 192.168.100.1/32 -p tcp -m multiport --dport 22,80,443 -j DROP\n");
+
+    fprintf(filter_fp, "-A INPUT -i brebhaul -d 169.254.85.0/24 -j ACCEPT\n");
+    fprintf(filter_fp, "-A INPUT -i brebhaul -m pkttype ! --pkt-type unicast -j ACCEPT\n");
+}
+
 #ifdef _PLATFORM_HAL_TEST_
 int main(int argc,char **argv)
 {
