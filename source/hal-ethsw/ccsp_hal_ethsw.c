@@ -1050,8 +1050,11 @@ INT CcspHalExtSw_setEthWanEnable(BOOLEAN enable)
 
 INT CcspHalExtSw_setEthWanPort(UINT Port)
 {
-    Port = 0;
-    return RETURN_OK;
+    if (Port == 0) {
+        return RETURN_OK;
+    } else {
+        return RETURN_ERR;
+    }
 }
 
 bool rpiNet_isInterfaceLinkUp(const char *ifname)
